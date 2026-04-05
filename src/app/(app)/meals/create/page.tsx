@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
+import { searchFoodDatabase } from "@/lib/foodDatabase";
 
 interface Food {
   id: number;
@@ -44,20 +45,64 @@ export default function CreateMealPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) { setSearching(false); return; }
 
-    const { data } = await supabase
+    // Search user's personal foods
+    const { data: userFoods } = await supabase
       .from("foods")
       .select("id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g")
       .eq("user_id", user.id)
       .ilike("name", `%${query}%`)
       .limit(10);
 
-    setSearchResults(data ?? []);
+    // Also search the internal database
+    const internalResults = searchFoodDatabase(query).slice(0, 10).map((f, i) => ({
+      id: -(i + 1), // negative IDs to distinguish from DB foods
+      name: f.name,
+      calories_per_100g: f.calories,
+      protein_per_100g: f.protein,
+      carbs_per_100g: f.carbs,
+      fat_per_100g: f.fat,
+      _isInternal: true,
+    }));
+
+    // Merge: user foods first, then internal (deduplicate by name)
+    const userResults = userFoods ?? [];
+    const seenNames = new Set(userResults.map((f) => f.name.toLowerCase()));
+    const combined = [
+      ...userResults,
+      ...internalResults.filter((f) => !seenNames.has(f.name.toLowerCase())),
+    ].slice(0, 15);
+
+    setSearchResults(combined);
     setSearching(false);
   }
 
-  function handleSelectFood(food: Food) {
+  async function handleSelectFood(food: Food) {
+    // If it's an internal database food (negative ID), save it to user's foods first
+    if (food.id < 0) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: saved } = await supabase
+        .from("foods")
+        .upsert({
+          user_id: user.id,
+          name: food.name,
+          calories_per_100g: food.calories_per_100g,
+          protein_per_100g: food.protein_per_100g,
+          carbs_per_100g: food.carbs_per_100g,
+          fat_per_100g: food.fat_per_100g,
+          is_verified: false,
+        }, { onConflict: "name,user_id" })
+        .select("id")
+        .maybeSingle();
+
+      if (saved) {
+        food = { ...food, id: saved.id };
+      }
+    }
+
     setSelectedFood(food);
     setSearchQuery("");
     setSearchResults([]);
