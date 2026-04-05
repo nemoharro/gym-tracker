@@ -1199,8 +1199,6 @@ export default function FoodPage() {
                   </div>
                 );
               })()}
-            </>
-            )}
           </div>
         )}
 
