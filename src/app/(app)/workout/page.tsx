@@ -6,7 +6,7 @@ import { ExercisePicker } from "@/components/ExercisePicker";
 import { LastSessionBanner } from "@/components/LastSessionBanner";
 import { SetRow } from "@/components/SetRow";
 import { AddSetForm } from "@/components/AddSetForm";
-import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check } from "lucide-react";
 import type { Exercise } from "@/hooks/useExercises";
 
 function formatDuration(startedAt: string) {
@@ -52,9 +52,10 @@ function ExerciseCard({
   onRemoveExercise: (exerciseId: number) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [finalized, setFinalized] = useState(false);
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
+    <div className={`bg-card rounded-xl border overflow-hidden ${finalized ? "border-primary/30" : "border-border"}`}>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-4"
@@ -64,6 +65,7 @@ function ExerciseCard({
           <span className="text-xs text-muted bg-secondary px-2 py-0.5 rounded-full">
             {sets.length} {sets.length === 1 ? "set" : "sets"}
           </span>
+          {finalized && <Check className="h-4 w-4 text-primary" />}
         </div>
         {expanded ? (
           <ChevronUp className="h-4 w-4 text-muted" />
@@ -74,7 +76,7 @@ function ExerciseCard({
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3">
-          <LastSessionBanner exerciseId={exerciseId} currentSessionId={sessionId} />
+          {!finalized && <LastSessionBanner exerciseId={exerciseId} currentSessionId={sessionId} />}
 
           {sets.length > 0 && (
             <div className="space-y-1.5">
@@ -85,26 +87,49 @@ function ExerciseCard({
                   weightKg={set.weightKg}
                   reps={set.reps}
                   rpe={set.rpe}
-                  onDelete={() => onDeleteSet(exerciseId, i)}
+                  onDelete={finalized ? undefined : () => onDeleteSet(exerciseId, i)}
                 />
               ))}
             </div>
           )}
 
-          <AddSetForm
-            exerciseId={exerciseId}
-            currentSessionId={sessionId}
-            currentSetCount={sets.length}
-            onAdd={(weight, reps) => onAddSet(exerciseId, weight, reps)}
-          />
+          {!finalized && (
+            <>
+              <AddSetForm
+                exerciseId={exerciseId}
+                currentSessionId={sessionId}
+                currentSetCount={sets.length}
+                onAdd={(weight, reps) => onAddSet(exerciseId, weight, reps)}
+              />
 
-          <button
-            onClick={() => onRemoveExercise(exerciseId)}
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-destructive transition-colors mx-auto"
-          >
-            <Trash2 className="h-3 w-3" />
-            Remove exercise
-          </button>
+              {sets.length > 0 && (
+                <button
+                  onClick={() => { setFinalized(true); setExpanded(false); }}
+                  className="w-full py-2.5 bg-primary/10 text-primary rounded-lg font-medium text-sm flex items-center justify-center gap-2"
+                >
+                  <Check className="h-4 w-4" />
+                  Done
+                </button>
+              )}
+
+              <button
+                onClick={() => onRemoveExercise(exerciseId)}
+                className="flex items-center gap-1.5 text-xs text-muted hover:text-destructive transition-colors mx-auto"
+              >
+                <Trash2 className="h-3 w-3" />
+                Remove exercise
+              </button>
+            </>
+          )}
+
+          {finalized && (
+            <button
+              onClick={() => { setFinalized(false); setExpanded(true); }}
+              className="w-full py-2 bg-secondary rounded-lg text-sm font-medium"
+            >
+              Edit
+            </button>
+          )}
         </div>
       )}
     </div>

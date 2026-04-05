@@ -8,6 +8,8 @@ INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Push-ups', 'Chest', 'bodyweight', false, NULL);
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Chest Press Machine', 'Chest', 'machine', false, NULL);
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Incline Dumbbell Press', 'Chest', 'dumbbell', false, NULL);
+INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Incline Smith Machine', 'Chest', 'machine', false, NULL);
+INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Flat Bench Press Machine', 'Chest', 'machine', false, NULL);
 
 -- Back (8)
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Barbell Row', 'Back', 'barbell', false, NULL);
@@ -39,6 +41,7 @@ INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Arnold Press', 'Shoulders', 'dumbbell', false, NULL);
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Upright Row', 'Shoulders', 'barbell', false, NULL);
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Cable Lateral Raise', 'Shoulders', 'cable', false, NULL);
+INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Shoulder Press', 'Shoulders', 'barbell', false, NULL);
 
 -- Arms (10)
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Barbell Curl', 'Arms', 'barbell', false, NULL);

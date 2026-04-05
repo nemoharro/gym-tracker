@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff } from "lucide-react";
 import Link from "next/link";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
@@ -72,6 +74,19 @@ export default function FoodPage() {
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const { isListening, transcript, isSupported, startListening, stopListening } = useSpeechRecognition();
+
+  // Handle voice transcript
+  useEffect(() => {
+    if (!transcript) return;
+    const parsed = parseFoodSpeech(transcript);
+    if (parsed.foodName) setFoodName(parsed.foodName);
+    if (parsed.quantity !== null) setQuantity(String(parsed.quantity));
+    if (parsed.mealType && parsed.mealType !== addingFor) {
+      setAddingFor(parsed.mealType);
+    }
+  }, [transcript]);
 
   const dateStr = formatDate(currentDate);
 
@@ -334,13 +349,24 @@ export default function FoodPage() {
               {/* Add form */}
               {addingFor === key && (
                 <div className="p-4 border-t border-border space-y-3 bg-secondary/30">
-                  <input
-                    type="text"
-                    placeholder="Food name (e.g. chicken breast)"
-                    value={foodName}
-                    onChange={(e) => setFoodName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Food name (e.g. chicken breast)"
+                      value={foodName}
+                      onChange={(e) => setFoodName(e.target.value)}
+                      className={`flex-1 px-3 py-2 rounded-lg bg-background border text-sm focus:outline-none focus:border-primary ${isListening ? "border-primary ring-2 ring-primary/30 animate-pulse" : "border-border"}`}
+                    />
+                    {isSupported && (
+                      <button
+                        type="button"
+                        onClick={isListening ? stopListening : startListening}
+                        className={`p-2 rounded-lg border transition-colors ${isListening ? "bg-destructive/10 border-destructive text-destructive" : "bg-secondary border-border text-muted hover:text-foreground"}`}
+                      >
+                        {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                      </button>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     <input
                       type="number"
