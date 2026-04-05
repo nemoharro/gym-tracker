@@ -30,6 +30,7 @@ export default function CreateMealPage() {
   const [quantity, setQuantity] = useState("");
   const [saving, setSaving] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [isBatch, setIsBatch] = useState(false);
   const [totalWeightOverride, setTotalWeightOverride] = useState("");
 
   const supabase = createClient();
@@ -149,12 +150,15 @@ export default function CreateMealPage() {
       return;
     }
 
-    const rawWeight = ingredients.reduce((s, i) => s + i.quantity_g, 0);
-    const batchWeight = parseFloat(totalWeightOverride) || rawWeight;
+    let batchWeight: number | null = null;
+    if (isBatch) {
+      const rawWeight = ingredients.reduce((s, i) => s + i.quantity_g, 0);
+      batchWeight = Math.round(parseFloat(totalWeightOverride) || rawWeight);
+    }
 
     const { data: meal, error: mealError } = await supabase
       .from("meals")
-      .insert({ user_id: user.id, name: mealName.trim(), total_weight_g: Math.round(batchWeight) })
+      .insert({ user_id: user.id, name: mealName.trim(), total_weight_g: batchWeight })
       .select("id")
       .single();
 
@@ -309,11 +313,11 @@ export default function CreateMealPage() {
         </div>
       )}
 
-      {/* Batch weight + totals */}
+      {/* Meal type + totals */}
       {ingredients.length > 0 && (() => {
         const rawWeight = ingredients.reduce((s, i) => s + i.quantity_g, 0);
         const batchWeight = parseFloat(totalWeightOverride) || rawWeight;
-        const per100 = batchWeight > 0 ? {
+        const per100 = isBatch && batchWeight > 0 ? {
           calories: Math.round(totals.calories / batchWeight * 100),
           protein: Math.round(totals.protein / batchWeight * 100 * 10) / 10,
           carbs: Math.round(totals.carbs / batchWeight * 100 * 10) / 10,
@@ -322,7 +326,18 @@ export default function CreateMealPage() {
 
         return (
           <div className="bg-secondary border border-border rounded-xl p-4 mb-6 space-y-3">
-            <h2 className="text-sm font-semibold">Batch Totals</h2>
+            {/* Batch toggle */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Meal Totals</h2>
+              <button
+                type="button"
+                onClick={() => setIsBatch(!isBatch)}
+                className={`text-xs font-medium px-3 py-1 rounded-full transition-colors ${isBatch ? "bg-primary text-primary-foreground" : "bg-background border border-border text-muted"}`}
+              >
+                {isBatch ? "Batch meal" : "Single meal"}
+              </button>
+            </div>
+
             <div className="flex gap-4 text-sm text-muted">
               <span>{Math.round(totals.calories)} kcal</span>
               <span>P: {Math.round(totals.protein)}g</span>
@@ -330,35 +345,43 @@ export default function CreateMealPage() {
               <span>F: {Math.round(totals.fat)}g</span>
             </div>
 
-            <div>
-              <label className="text-xs text-muted block mb-1">
-                Total batch weight (ingredients sum: {Math.round(rawWeight)}g)
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  placeholder={String(Math.round(rawWeight))}
-                  value={totalWeightOverride}
-                  onChange={(e) => setTotalWeightOverride(e.target.value)}
-                  className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
-              </div>
-              <p className="text-xs text-muted mt-1">
-                Adjust if cooking changes the weight (e.g. water evaporation)
-              </p>
-            </div>
+            {!isBatch && (
+              <p className="text-xs text-muted">Logging this meal will add all macros at once.</p>
+            )}
 
-            {per100 && (
-              <div>
-                <p className="text-xs text-muted font-medium mb-1">Per 100g serving</p>
-                <div className="flex gap-4 text-sm">
-                  <span>{per100.calories} kcal</span>
-                  <span>P: {per100.protein}g</span>
-                  <span>C: {per100.carbs}g</span>
-                  <span>F: {per100.fat}g</span>
+            {isBatch && (
+              <>
+                <div>
+                  <label className="text-xs text-muted block mb-1">
+                    Total batch weight (ingredients: {Math.round(rawWeight)}g)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      placeholder={String(Math.round(rawWeight))}
+                      value={totalWeightOverride}
+                      onChange={(e) => setTotalWeightOverride(e.target.value)}
+                      className="w-full bg-background border border-border rounded-lg px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
+                  </div>
+                  <p className="text-xs text-muted mt-1">
+                    Adjust if cooking changes the weight
+                  </p>
                 </div>
-              </div>
+
+                {per100 && (
+                  <div>
+                    <p className="text-xs text-muted font-medium mb-1">Per 100g serving</p>
+                    <div className="flex gap-4 text-sm">
+                      <span>{per100.calories} kcal</span>
+                      <span>P: {per100.protein}g</span>
+                      <span>C: {per100.carbs}g</span>
+                      <span>F: {per100.fat}g</span>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         );

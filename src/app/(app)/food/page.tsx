@@ -68,6 +68,16 @@ export default function FoodPage() {
   // Add form state
   const [foodName, setFoodName] = useState("");
   const [quantity, setQuantity] = useState("100");
+  const [quantityUnit, setQuantityUnit] = useState<"g" | "kg" | "ml" | "L">("g");
+
+  function toGrams(value: number, unit: "g" | "kg" | "ml" | "L"): number {
+    switch (unit) {
+      case "kg": return value * 1000;
+      case "L": return value * 1000;
+      case "ml": return value;
+      default: return value;
+    }
+  }
   const [estimated, setEstimated] = useState<EstimatedNutrition | null>(null);
   const [editableEstimate, setEditableEstimate] = useState<EstimatedNutrition | null>(null);
   const [estimating, setEstimating] = useState(false);
@@ -279,6 +289,7 @@ export default function FoodPage() {
   function resetForm() {
     setFoodName("");
     setQuantity("100");
+    setQuantityUnit("g");
     setEstimated(null);
     setEditableEstimate(null);
     setEstimateError("");
@@ -318,7 +329,7 @@ export default function FoodPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
 
-    const q = parseFloat(quantity) || 100;
+    const q = toGrams(parseFloat(quantity) || 100, quantityUnit);
     const multiplier = q / 100;
 
     // Upsert food to avoid duplicates by name per user
@@ -687,6 +698,36 @@ export default function FoodPage() {
     fetchData();
   }
 
+  async function handleLogWholeMeal() {
+    if (!selectedMeal) return;
+    setMealLogging(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setMealLogging(false); return; }
+
+    const { error } = await supabase.from("food_log").insert({
+      user_id: user.id,
+      logged_at: dateStr,
+      meal_type: "meal",
+      meal_id: selectedMeal.id,
+      quantity_g: null,
+      servings: 1,
+      calories: Math.round(selectedMeal.totalCal),
+      protein: Math.round(selectedMeal.totalProtein * 10) / 10,
+      carbs: Math.round(selectedMeal.totalCarbs * 10) / 10,
+      fat: Math.round(selectedMeal.totalFat * 10) / 10,
+      fiber: Math.round(selectedMeal.totalFiber * 10) / 10,
+    });
+
+    if (error) {
+      alert("Failed to log meal.");
+    }
+
+    setMealLogging(false);
+    setSelectedMeal(null);
+    setShowMealPicker(false);
+    fetchData();
+  }
+
   async function handleTargetsChange(newTargets: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -963,7 +1004,24 @@ export default function FoodPage() {
                 </div>
 
                 {!selectedMeal.total_weight_g ? (
-                  <p className="text-xs text-destructive">This meal has no batch weight set. Edit the meal first to set a total weight.</p>
+                  <>
+                    <div className="p-3 bg-primary/5 rounded-lg">
+                      <p className="text-xs text-muted font-medium mb-1">Full meal</p>
+                      <div className="flex gap-3 text-sm">
+                        <span className="font-medium">{Math.round(selectedMeal.totalCal)} kcal</span>
+                        <span className="text-muted">P: {Math.round(selectedMeal.totalProtein)}g</span>
+                        <span className="text-muted">C: {Math.round(selectedMeal.totalCarbs)}g</span>
+                        <span className="text-muted">F: {Math.round(selectedMeal.totalFat)}g</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleLogWholeMeal}
+                      disabled={mealLogging}
+                      className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                    >
+                      {mealLogging ? "Logging..." : `Log ${selectedMeal.name}`}
+                    </button>
+                  </>
                 ) : (
                   <>
                     <div>
@@ -1067,15 +1125,24 @@ export default function FoodPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                <div className="flex-1 relative">
+                <div className="flex-1 flex gap-1.5">
                   <input
                     type="number"
                     placeholder="Quantity"
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full px-3 py-2 pr-8 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
+                  <select
+                    value={quantityUnit}
+                    onChange={(e) => setQuantityUnit(e.target.value as "g" | "kg" | "ml" | "L")}
+                    className="px-2 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option value="g">g</option>
+                    <option value="kg">kg</option>
+                    <option value="ml">ml</option>
+                    <option value="L">L</option>
+                  </select>
                 </div>
                 <button
                   onClick={handleEstimate}
@@ -1096,7 +1163,7 @@ export default function FoodPage() {
               )}
 
               {editableEstimate && (() => {
-                const q = parseFloat(quantity) || 100;
+                const q = toGrams(parseFloat(quantity) || 100, quantityUnit);
                 const mult = q / 100;
                 return (
                   <div className="space-y-2">
