@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
 
 interface BarcodeScannerProps {
   open: boolean;
@@ -14,15 +14,41 @@ export function isBarcodeSupported(): boolean {
   return !!navigator.mediaDevices?.getUserMedia;
 }
 
+const CONTAINER_ID = "barcode-scanner-container";
+
+async function stopScanner(scanner: any) {
+  if (!scanner) return;
+  try {
+    const state = scanner.getState?.();
+    // Html5QrcodeScannerState: NOT_STARTED=1, SCANNING=2, PAUSED=3
+    if (state === 2 || state === 3) {
+      await scanner.stop();
+    }
+    scanner.clear();
+  } catch {
+    // Best-effort cleanup
+  }
+}
+
+async function waitForContainer(id: string, maxAttempts = 10): Promise<HTMLElement | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const el = document.getElementById(id);
+    if (el) return el;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return null;
+}
+
 export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   const scannerRef = useRef<any>(null);
   const [error, setError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
+  const [cameraStatus, setCameraStatus] = useState<"starting" | "active" | "error">("starting");
+  const [manualBarcode, setManualBarcode] = useState("");
+  const [showManualEntry, setShowManualEntry] = useState(false);
   const detectedRef = useRef(false);
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
-
-  const CONTAINER_ID = "barcode-scanner-container";
 
   useEffect(() => {
     if (!open) return;
@@ -31,22 +57,22 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
     let mounted = true;
     detectedRef.current = false;
     setError("");
+    setCameraStatus("starting");
 
     async function start() {
-      // Wait a tick for the DOM element to render
-      await new Promise((r) => setTimeout(r, 100));
+      const container = await waitForContainer(CONTAINER_ID);
       if (!mounted) return;
 
-      const container = document.getElementById(CONTAINER_ID);
       if (!container) {
         setError("Scanner container not found. Please try again.");
+        setCameraStatus("error");
+        setShowManualEntry(true);
         return;
       }
 
       try {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("html5-qrcode");
 
-        // Explicitly enable barcode formats
         scanner = new Html5Qrcode(CONTAINER_ID, {
           formatsToSupport: [
             Html5QrcodeSupportedFormats.EAN_13,
@@ -62,34 +88,80 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         });
         scannerRef.current = scanner;
 
-        await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 15,
-            qrbox: { width: 280, height: 150 },
-            aspectRatio: 1.777,
-            disableFlip: false,
-          },
-          (decodedText: string) => {
-            if (!detectedRef.current) {
-              detectedRef.current = true;
-              scanner.stop().catch(() => {});
-              onScanRef.current(decodedText);
-            }
-          },
-          () => {
-            // No barcode in frame — ignore
+        const scanConfig = {
+          fps: 15,
+          qrbox: { width: Math.min(280, window.innerWidth - 40), height: 150 },
+          aspectRatio: 1.777,
+          disableFlip: false,
+        };
+
+        const onSuccess = (decodedText: string) => {
+          if (!detectedRef.current) {
+            detectedRef.current = true;
+            scanner.stop().catch(() => {});
+            onScanRef.current(decodedText);
           }
-        );
+        };
+
+        const onError = () => {
+          // No barcode in frame — ignore
+        };
+
+        // Camera fallback chain: environment → user → first available device
+        let started = false;
+
+        // Try 1: Rear camera
+        try {
+          await scanner.start({ facingMode: "environment" }, scanConfig, onSuccess, onError);
+          started = true;
+        } catch {
+          // Rear camera unavailable, try front
+        }
+
+        // Try 2: Front camera
+        if (!started) {
+          try {
+            await scanner.start({ facingMode: "user" }, scanConfig, onSuccess, onError);
+            started = true;
+          } catch {
+            // Front camera also unavailable
+          }
+        }
+
+        // Try 3: Enumerate devices and use first available
+        if (!started) {
+          try {
+            const cameras = await Html5Qrcode.getCameras();
+            if (cameras.length > 0) {
+              await scanner.start(cameras[0].id, scanConfig, onSuccess, onError);
+              started = true;
+            }
+          } catch {
+            // Device enumeration failed
+          }
+        }
+
+        if (!mounted) return;
+
+        if (started) {
+          setCameraStatus("active");
+        } else {
+          setCameraStatus("error");
+          setError("Could not access any camera. You can type the barcode manually below.");
+          setShowManualEntry(true);
+        }
       } catch (err: any) {
+        if (!mounted) return;
         const msg = err?.message || String(err);
         if (msg.includes("Permission") || msg.includes("NotAllowed")) {
           setError("Camera permission denied. Please allow camera access in your browser settings.");
         } else if (msg.includes("NotFound") || msg.includes("DevicesNotFound")) {
           setError("No camera found on this device.");
         } else {
-          setError("Could not start camera. Please try again.");
+          setError("Could not start camera. You can type the barcode manually below.");
         }
+        setCameraStatus("error");
+        setShowManualEntry(true);
       }
     }
 
@@ -97,51 +169,117 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
 
     return () => {
       mounted = false;
-      if (scanner) {
-        scanner.stop().catch(() => {});
-        scanner.clear().catch(() => {});
-      }
+      stopScanner(scanner);
     };
   }, [open, retryCount]);
 
-  function handleClose() {
-    if (scannerRef.current) {
-      scannerRef.current.stop().catch(() => {});
-      scannerRef.current.clear().catch(() => {});
-      scannerRef.current = null;
-    }
+  async function handleClose() {
+    await stopScanner(scannerRef.current);
+    scannerRef.current = null;
     onClose();
+  }
+
+  function handleManualSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const cleaned = manualBarcode.trim();
+    if (!/^\d{8,14}$/.test(cleaned)) {
+      setError("Please enter a valid barcode (8-14 digits).");
+      return;
+    }
+    stopScanner(scannerRef.current);
+    scannerRef.current = null;
+    onScanRef.current(cleaned);
+  }
+
+  function handleRetry() {
+    setError("");
+    setShowManualEntry(false);
+    detectedRef.current = false;
+    setRetryCount((c) => c + 1);
   }
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      <div className="flex items-center justify-between p-4">
-        <h2 className="text-white font-semibold">Scan Barcode</h2>
-        <button onClick={handleClose} className="p-2 text-white">
-          <X className="h-6 w-6" />
+      {/* Top bar */}
+      <div
+        className="flex items-center justify-between p-4 z-10"
+        style={{ paddingTop: "max(env(safe-area-inset-top, 16px), 16px)" }}
+      >
+        <h2 className="text-white font-semibold text-lg">Scan Barcode</h2>
+        <button
+          onClick={handleClose}
+          className="flex items-center gap-1.5 px-4 py-2 bg-white text-black rounded-full font-semibold text-sm shadow-lg active:bg-gray-200"
+        >
+          <X className="h-4 w-4" />
+          Close
         </button>
       </div>
 
-      <div className="flex-1 flex items-center justify-center px-4">
+      {/* Camera viewport */}
+      <div className="flex-1 flex items-center justify-center px-4 relative">
+        {cameraStatus === "starting" && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-white/60 text-sm">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Starting camera...
+            </div>
+          </div>
+        )}
         <div id={CONTAINER_ID} className="w-full max-w-md" />
       </div>
 
+      {/* Error display */}
       {error && (
-        <div className="p-4 text-center">
-          <p className="text-red-400 text-sm">{error}</p>
+        <div className="px-4 pb-2 text-center">
+          <p className="text-red-400 text-sm mb-3">{error}</p>
           <button
-            onClick={() => { setError(""); detectedRef.current = false; setRetryCount((c) => c + 1); }}
-            className="mt-2 text-sm text-white/60 underline"
+            onClick={handleRetry}
+            className="px-4 py-2 bg-white text-black rounded-lg font-medium text-sm"
           >
             Try again
           </button>
         </div>
       )}
 
-      <div className="p-4 text-center">
-        <p className="text-white/60 text-sm">Point your camera at a barcode</p>
+      {/* Bottom section: manual entry + hint */}
+      <div
+        className="p-4"
+        style={{ paddingBottom: "max(env(safe-area-inset-bottom, 16px), 16px)" }}
+      >
+        {!showManualEntry ? (
+          <button
+            onClick={() => setShowManualEntry(true)}
+            className="text-white/60 text-sm underline w-full text-center"
+          >
+            Type barcode manually
+          </button>
+        ) : (
+          <form onSubmit={handleManualSubmit} className="flex gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Enter barcode number"
+              value={manualBarcode}
+              onChange={(e) => setManualBarcode(e.target.value)}
+              className="flex-1 px-3 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white text-sm placeholder:text-white/40 outline-none focus:border-white/40"
+              autoFocus
+            />
+            <button
+              type="submit"
+              className="px-4 py-2.5 bg-white text-black rounded-lg font-medium text-sm"
+            >
+              Look up
+            </button>
+          </form>
+        )}
+        {cameraStatus === "active" && !error && (
+          <p className="text-white/40 text-xs text-center mt-2">
+            Point camera at a barcode
+          </p>
+        )}
       </div>
     </div>
   );

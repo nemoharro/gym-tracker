@@ -8,17 +8,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing barcode" }, { status: 400 });
   }
 
+  const cleaned = barcode.replace(/\s/g, "");
+  if (!/^\d{8,14}$/.test(cleaned)) {
+    return NextResponse.json({ error: "Invalid barcode format" }, { status: 400 });
+  }
+
   try {
     const res = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}?fields=product_name,brands,nutriments,image_url`,
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(cleaned)}?fields=product_name,brands,nutriments,image_url`,
       {
         headers: { "User-Agent": "GymTracker/1.0" },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(12000),
       }
     );
 
     if (!res.ok) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 });
+      if (res.status === 404) {
+        return NextResponse.json({ error: "Product not found" }, { status: 404 });
+      }
+      console.error(`Open Food Facts API error: ${res.status} ${res.statusText} for barcode ${cleaned}`);
+      return NextResponse.json(
+        { error: `Upstream API error (${res.status})` },
+        { status: 502 }
+      );
     }
 
     const data = await res.json();
@@ -33,7 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       product_name: p.product_name || "Unknown product",
       brand: p.brands || null,
-      barcode,
+      barcode: cleaned,
       calories: Math.round(n["energy-kcal_100g"] || 0),
       protein: Math.round((n["proteins_100g"] || 0) * 10) / 10,
       carbs: Math.round((n["carbohydrates_100g"] || 0) * 10) / 10,
@@ -43,7 +55,13 @@ export async function POST(request: Request) {
       saturated_fat: Math.round((n["saturated-fat_100g"] || 0) * 10) / 10,
       sodium: Math.round((n["sodium_100g"] || 0) * 1000) / 10,
     });
-  } catch {
-    return NextResponse.json({ error: "Failed to look up product" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const isTimeout = message.includes("abort") || message.includes("timeout");
+    console.error(`Barcode lookup failed for ${cleaned}: ${message}`);
+    return NextResponse.json(
+      { error: isTimeout ? "Request timed out. Please try again." : "Failed to look up product." },
+      { status: isTimeout ? 504 : 500 }
+    );
   }
 }

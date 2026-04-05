@@ -194,18 +194,21 @@ export type Database = {
           id: number
           user_id: string
           name: string
+          total_weight_g: number | null
           created_at: string
         }
         Insert: {
           id?: number
           user_id: string
           name: string
+          total_weight_g?: number | null
           created_at?: string
         }
         Update: {
           id?: number
           user_id?: string
           name?: string
+          total_weight_g?: number | null
           created_at?: string
         }
         Relationships: []

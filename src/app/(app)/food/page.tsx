@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
@@ -106,6 +106,13 @@ export default function FoodPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [barcodeSupported, setBarcodeSupported] = useState(false);
+
+  // Meal logging
+  const [showMealPicker, setShowMealPicker] = useState(false);
+  const [savedMeals, setSavedMeals] = useState<Array<{ id: number; name: string; total_weight_g: number | null; totalCal: number; totalProtein: number; totalCarbs: number; totalFat: number; totalFiber: number }>>([]);
+  const [selectedMeal, setSelectedMeal] = useState<typeof savedMeals[0] | null>(null);
+  const [mealPortion, setMealPortion] = useState("");
+  const [mealLogging, setMealLogging] = useState(false);
 
   useEffect(() => {
     setBarcodeSupported(isBarcodeSupported());
@@ -576,16 +583,108 @@ export default function FoodPage() {
           saturated_fat: data.saturated_fat,
           sodium: data.sodium,
         });
-      } else {
-        setEstimateError("Product not found. Try creating it manually.");
+      } else if (res.status === 404) {
+        setEstimateError("Product not found in database. Try creating it manually.");
         setShowCreateFood(true);
         setShowAddForm(false);
+      } else {
+        setEstimateError(data?.error || "Failed to look up barcode.");
       }
-    } catch {
-      setEstimateError("Failed to look up barcode.");
+    } catch (err: unknown) {
+      console.error("Barcode lookup fetch failed:", err);
+      setEstimateError("Network error looking up barcode. Check your connection.");
     } finally {
       setScanLoading(false);
     }
+  }
+
+  async function fetchMeals() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: mealsData } = await supabase
+      .from("meals")
+      .select("id, name, total_weight_g")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (!mealsData || mealsData.length === 0) { setSavedMeals([]); return; }
+
+    const mealsList: typeof savedMeals = [];
+    for (const meal of mealsData) {
+      const { data: ings } = await supabase
+        .from("meal_ingredients")
+        .select("quantity_g, food_id")
+        .eq("meal_id", meal.id);
+
+      if (!ings || ings.length === 0) continue;
+
+      const foodIds = [...new Set(ings.map(i => i.food_id))];
+      const { data: foods } = await supabase
+        .from("foods")
+        .select("id, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, fiber_per_100g")
+        .in("id", foodIds);
+
+      const foodMap = new Map(foods?.map(f => [f.id, f]));
+      let totalCal = 0, totalProtein = 0, totalCarbs = 0, totalFat = 0, totalFiber = 0;
+      for (const ing of ings) {
+        const f = foodMap.get(ing.food_id);
+        if (!f) continue;
+        const factor = ing.quantity_g / 100;
+        totalCal += factor * f.calories_per_100g;
+        totalProtein += factor * f.protein_per_100g;
+        totalCarbs += factor * f.carbs_per_100g;
+        totalFat += factor * f.fat_per_100g;
+        totalFiber += factor * (f.fiber_per_100g ?? 0);
+      }
+
+      mealsList.push({
+        id: meal.id,
+        name: meal.name,
+        total_weight_g: meal.total_weight_g,
+        totalCal, totalProtein, totalCarbs, totalFat, totalFiber,
+      });
+    }
+    setSavedMeals(mealsList);
+  }
+
+  async function handleLogMealPortion() {
+    if (!selectedMeal || !mealPortion) return;
+    const portionG = parseFloat(mealPortion);
+    if (isNaN(portionG) || portionG <= 0) return;
+
+    const batchWeight = selectedMeal.total_weight_g || 0;
+    if (batchWeight <= 0) return;
+
+    setMealLogging(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setMealLogging(false); return; }
+
+    const ratio = portionG / batchWeight;
+
+    const { error } = await supabase.from("food_log").insert({
+      user_id: user.id,
+      logged_at: dateStr,
+      meal_type: "meal",
+      meal_id: selectedMeal.id,
+      quantity_g: portionG,
+      servings: 1,
+      calories: Math.round(selectedMeal.totalCal * ratio),
+      protein: Math.round(selectedMeal.totalProtein * ratio * 10) / 10,
+      carbs: Math.round(selectedMeal.totalCarbs * ratio * 10) / 10,
+      fat: Math.round(selectedMeal.totalFat * ratio * 10) / 10,
+      fiber: Math.round(selectedMeal.totalFiber * ratio * 10) / 10,
+    });
+
+    if (error) {
+      alert("Failed to log meal portion.");
+    }
+
+    setMealLogging(false);
+    setSelectedMeal(null);
+    setMealPortion("");
+    setShowMealPicker(false);
+    fetchData();
   }
 
   async function handleTargetsChange(newTargets: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) {
@@ -680,25 +779,32 @@ export default function FoodPage() {
         {/* Add Food Actions */}
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowAddForm(!showAddForm); setShowAskAI(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
+            onClick={() => { setShowAddForm(!showAddForm); setShowAskAI(false); setShowCreateFood(false); setShowMealPicker(false); if (showAddForm) resetForm(); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAddForm ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <Plus className="h-4 w-4" />
-            Add Food
+            Food
           </button>
           <button
-            onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); }}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+            onClick={() => { setShowMealPicker(!showMealPicker); setShowAddForm(false); setShowAskAI(false); setShowCreateFood(false); if (!showMealPicker) fetchMeals(); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showMealPicker ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+          >
+            <UtensilsCrossed className="h-4 w-4" />
+            Meal
+          </button>
+          <button
+            onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); setShowMealPicker(false); }}
+            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <MessageCircle className="h-4 w-4" />
-            Ask AI
+            AI
           </button>
           <button
-            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowAskAI(false); }}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowAskAI(false); setShowMealPicker(false); }}
+            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <PlusCircle className="h-3.5 w-3.5" />
-            Create
+            New
           </button>
         </div>
 
@@ -799,6 +905,110 @@ export default function FoodPage() {
               >
                 {creatingSaving ? "Saving..." : "Save Food"}
               </button>
+          </div>
+        )}
+
+        {/* Meal picker */}
+        {showMealPicker && (
+          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium">Log Meal Portion</p>
+              <button onClick={() => { setShowMealPicker(false); setSelectedMeal(null); setMealPortion(""); }} className="p-1 text-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {!selectedMeal ? (
+              <>
+                {savedMeals.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted mb-2">No saved meals yet</p>
+                    <Link href="/meals/create" className="text-sm text-primary font-medium">Create a meal</Link>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {savedMeals.map((meal) => {
+                      const per100 = meal.total_weight_g && meal.total_weight_g > 0
+                        ? Math.round(meal.totalCal / meal.total_weight_g * 100)
+                        : null;
+                      return (
+                        <button
+                          key={meal.id}
+                          onClick={() => setSelectedMeal(meal)}
+                          className="w-full text-left p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+                        >
+                          <p className="text-sm font-medium">{meal.name}</p>
+                          <p className="text-xs text-muted">
+                            {meal.total_weight_g ? `${Math.round(meal.total_weight_g)}g batch` : "No batch weight set"}
+                            {per100 != null && ` \u00B7 ${per100} kcal/100g`}
+                            {` \u00B7 ${Math.round(meal.totalCal)} kcal total`}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 bg-secondary rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{selectedMeal.name}</p>
+                    <button onClick={() => setSelectedMeal(null)} className="text-xs text-primary">Change</button>
+                  </div>
+                  <p className="text-xs text-muted mt-0.5">
+                    {selectedMeal.total_weight_g ? `${Math.round(selectedMeal.total_weight_g)}g batch` : "No batch weight"}
+                    {` \u00B7 ${Math.round(selectedMeal.totalCal)} kcal total`}
+                  </p>
+                </div>
+
+                {!selectedMeal.total_weight_g ? (
+                  <p className="text-xs text-destructive">This meal has no batch weight set. Edit the meal first to set a total weight.</p>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs text-muted block mb-1">How much did you have?</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          placeholder="e.g. 350"
+                          value={mealPortion}
+                          onChange={(e) => setMealPortion(e.target.value)}
+                          className="w-full px-3 py-2 pr-8 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
+                      </div>
+                    </div>
+
+                    {mealPortion && parseFloat(mealPortion) > 0 && (() => {
+                      const portion = parseFloat(mealPortion);
+                      const ratio = portion / selectedMeal.total_weight_g!;
+                      return (
+                        <div className="p-3 bg-primary/5 rounded-lg">
+                          <p className="text-xs text-muted font-medium mb-1">
+                            {Math.round(ratio * 100)}% of batch ({Math.round(portion)}g / {Math.round(selectedMeal.total_weight_g!)}g)
+                          </p>
+                          <div className="flex gap-3 text-sm">
+                            <span className="font-medium">{Math.round(selectedMeal.totalCal * ratio)} kcal</span>
+                            <span className="text-muted">P: {Math.round(selectedMeal.totalProtein * ratio)}g</span>
+                            <span className="text-muted">C: {Math.round(selectedMeal.totalCarbs * ratio)}g</span>
+                            <span className="text-muted">F: {Math.round(selectedMeal.totalFat * ratio)}g</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <button
+                      onClick={handleLogMealPortion}
+                      disabled={mealLogging || !mealPortion || parseFloat(mealPortion) <= 0}
+                      className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                    >
+                      {mealLogging ? "Logging..." : `Log ${mealPortion || "0"}g of ${selectedMeal.name}`}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -72,6 +72,7 @@ create table public.meals (
   id serial primary key,
   user_id uuid references auth.users(id) not null,
   name text not null,
+  total_weight_g numeric(8,1),
   created_at timestamptz default now()
 );
 
