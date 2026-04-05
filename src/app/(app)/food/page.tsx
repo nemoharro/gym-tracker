@@ -444,13 +444,16 @@ export default function FoodPage() {
                 )}
               </div>
               <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder="Grams"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                />
+                <div className="flex-1 relative">
+                  <input
+                    type="number"
+                    placeholder="Quantity"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="w-full px-3 py-2 pr-8 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
+                </div>
                 <button
                   onClick={handleEstimate}
                   disabled={estimating || !foodName.trim()}
@@ -469,42 +472,64 @@ export default function FoodPage() {
                 <p className="text-xs text-destructive">{estimateError}</p>
               )}
 
-              {editableEstimate && (
-                <div className="space-y-2">
-                  {editableEstimate.product_name && (
-                    <p className="text-xs text-muted">
-                      {editableEstimate.brand && `${editableEstimate.brand} — `}{editableEstimate.product_name}
-                    </p>
-                  )}
-                  <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
-                    {([
-                      { key: "calories", label: "Cal/100g" },
-                      { key: "protein", label: "Protein" },
-                      { key: "carbs", label: "Carbs" },
-                      { key: "fat", label: "Fat" },
-                      { key: "fiber", label: "Fiber" },
-                    ] as const).map(({ key, label }) => (
-                      <div key={key} className="p-2 bg-background rounded-lg">
-                        <p className="text-muted mb-1">{label}</p>
-                        <input
-                          type="number"
-                          value={editableEstimate[key]}
-                          onChange={(e) => setEditableEstimate({ ...editableEstimate, [key]: parseFloat(e.target.value) || 0 })}
-                          className="w-full text-center text-sm font-medium bg-transparent focus:outline-none focus:bg-secondary rounded"
-                        />
-                        <p className="text-muted">{key === "calories" ? "kcal" : "g"}</p>
-                      </div>
-                    ))}
+              {editableEstimate && (() => {
+                const q = parseFloat(quantity) || 100;
+                const mult = q / 100;
+                return (
+                  <div className="space-y-2">
+                    {editableEstimate.product_name && (
+                      <p className="text-xs text-muted">
+                        {editableEstimate.brand && `${editableEstimate.brand} — `}{editableEstimate.product_name}
+                      </p>
+                    )}
+                    {/* Per 100g (editable) */}
+                    <p className="text-xs text-muted font-medium">Per 100g (tap to edit)</p>
+                    <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
+                      {([
+                        { key: "calories", label: "Cal" },
+                        { key: "protein", label: "Protein" },
+                        { key: "carbs", label: "Carbs" },
+                        { key: "fat", label: "Fat" },
+                        { key: "fiber", label: "Fiber" },
+                      ] as const).map(({ key, label }) => (
+                        <div key={key} className="p-1.5 bg-background rounded-lg">
+                          <p className="text-muted mb-0.5">{label}</p>
+                          <input
+                            type="number"
+                            value={editableEstimate[key]}
+                            onChange={(e) => setEditableEstimate({ ...editableEstimate, [key]: parseFloat(e.target.value) || 0 })}
+                            className="w-full text-center text-xs font-medium bg-transparent focus:outline-none focus:bg-secondary rounded"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {/* Live calculated preview for actual quantity */}
+                    <p className="text-xs text-muted font-medium">For {q}g</p>
+                    <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
+                      {([
+                        { label: "Cal", value: Math.round(editableEstimate.calories * mult) },
+                        { label: "Protein", value: Math.round(editableEstimate.protein * mult * 10) / 10 },
+                        { label: "Carbs", value: Math.round(editableEstimate.carbs * mult * 10) / 10 },
+                        { label: "Fat", value: Math.round(editableEstimate.fat * mult * 10) / 10 },
+                        { label: "Fiber", value: Math.round(editableEstimate.fiber * mult * 10) / 10 },
+                      ]).map(({ label, value }) => (
+                        <div key={label} className="p-1.5 bg-primary/5 rounded-lg">
+                          <p className="text-muted mb-0.5">{label}</p>
+                          <p className="font-semibold text-sm">{value}</p>
+                          <p className="text-muted">{label === "Cal" ? "kcal" : "g"}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={handleLog}
+                      disabled={saving}
+                      className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                    >
+                      {saving ? "Logging..." : `Log ${q}g of ${foodName}`}
+                    </button>
                   </div>
-                  <button
-                    onClick={handleLog}
-                    disabled={saving}
-                    className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-                  >
-                    {saving ? "Logging..." : `Log ${quantity}g of ${foodName}`}
-                  </button>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </div>

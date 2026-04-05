@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell, History, TrendingUp, UtensilsCrossed, Scale } from "lucide-react";
+import { Dumbbell, History, TrendingUp, UtensilsCrossed, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -10,7 +10,7 @@ const navItems = [
   { href: "/history", label: "History", icon: History },
   { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/food", label: "Food", icon: UtensilsCrossed },
-  { href: "/weight", label: "Weight", icon: Scale },
+  { href: "/splits", label: "Splits", icon: LayoutGrid },
 ];
 
 export function BottomNav() {

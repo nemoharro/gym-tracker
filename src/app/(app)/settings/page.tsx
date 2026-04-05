@@ -57,12 +57,15 @@ export default function SettingsPage() {
       .limit(1)
       .single();
 
+    const p = parseInt(protein) || 180;
+    const c = parseInt(carbs) || 250;
+    const f = parseInt(fat) || 80;
     const values = {
       user_id: user.id,
-      calories: parseInt(calories) || 2500,
-      protein_g: parseInt(protein) || 180,
-      carbs_g: parseInt(carbs) || 250,
-      fat_g: parseInt(fat) || 80,
+      calories: (p * 4) + (c * 4) + (f * 9),
+      protein_g: p,
+      carbs_g: c,
+      fat_g: f,
       fiber_g: parseInt(fiber) || 30,
     };
 

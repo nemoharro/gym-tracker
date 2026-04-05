@@ -25,7 +25,7 @@ interface WorkoutState {
   exercises: WorkoutExercise[];
 
   // Actions
-  startWorkout: () => Promise<void>;
+  startWorkout: (splitDayId?: number) => Promise<void>;
   finishWorkout: (notes?: string) => Promise<void>;
   addExercise: (exerciseId: number, exerciseName: string) => void;
   removeExercise: (exerciseId: number) => void;
@@ -52,7 +52,7 @@ export const useWorkout = create<WorkoutState>((set, get) => ({
   startedAt: null,
   exercises: [],
 
-  startWorkout: async () => {
+  startWorkout: async (splitDayId?: number) => {
     const supabase = createClient();
     const {
       data: { user },
@@ -61,17 +61,44 @@ export const useWorkout = create<WorkoutState>((set, get) => ({
 
     const { data, error } = await supabase
       .from("workout_sessions")
-      .insert({ user_id: user.id })
+      .insert({ user_id: user.id, split_day_id: splitDayId ?? null })
       .select("id, started_at")
       .single();
 
     if (error || !data) return;
 
+    // Pre-populate exercises from split day if provided
+    let preloadedExercises: WorkoutExercise[] = [];
+    if (splitDayId) {
+      const { data: dayExercises } = await supabase
+        .from("split_day_exercises")
+        .select("exercise_id")
+        .eq("split_day_id", splitDayId)
+        .order("order_index", { ascending: true });
+
+      if (dayExercises && dayExercises.length > 0) {
+        const ids = dayExercises.map((e) => e.exercise_id);
+        const { data: exNames } = await supabase
+          .from("exercises")
+          .select("id, name")
+          .in("id", ids);
+
+        const nameMap = new Map<number, string>();
+        if (exNames) for (const e of exNames) nameMap.set(e.id, e.name);
+
+        preloadedExercises = dayExercises.map((e) => ({
+          exerciseId: e.exercise_id,
+          exerciseName: nameMap.get(e.exercise_id) ?? "Unknown",
+          sets: [],
+        }));
+      }
+    }
+
     set({
       isActive: true,
       sessionId: data.id,
       startedAt: data.started_at,
-      exercises: [],
+      exercises: preloadedExercises,
     });
   },
 

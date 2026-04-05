@@ -6,8 +6,9 @@ import { ExercisePicker } from "@/components/ExercisePicker";
 import { LastSessionBanner } from "@/components/LastSessionBanner";
 import { SetRow } from "@/components/SetRow";
 import { AddSetForm } from "@/components/AddSetForm";
-import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check } from "lucide-react";
+import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check, Dumbbell, TrendingUp } from "lucide-react";
 import type { Exercise } from "@/hooks/useExercises";
+import { useTodaysWorkout } from "@/hooks/useTodaysWorkout";
 
 function formatDuration(startedAt: string) {
   const start = new Date(startedAt).getTime();
@@ -163,19 +164,86 @@ export default function WorkoutPage() {
     setFinishing(false);
   }
 
+  const { todaysWorkout, loading: todayLoading } = useTodaysWorkout();
+
+  async function handleStartToday() {
+    if (todaysWorkout) {
+      await startWorkout(todaysWorkout.splitDayId);
+    }
+  }
+
   // Not started yet
   if (!isActive) {
     return (
-      <div className="p-4 flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="text-center">
+      <div className="p-4 space-y-4">
+        <div className="text-center py-4">
           <h1 className="text-2xl font-bold mb-2">Ready to train?</h1>
-          <p className="text-muted">Start a workout to begin tracking your sets.</p>
+          <p className="text-muted text-sm">Start a workout to begin tracking your sets.</p>
         </div>
+
+        {/* Today's preview */}
+        {todaysWorkout && todaysWorkout.exercises.length > 0 && (
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <div className="flex items-center gap-2 mb-1">
+                <Dumbbell className="h-4 w-4 text-primary" />
+                <h2 className="font-semibold">{todaysWorkout.splitDayName}</h2>
+              </div>
+              <p className="text-xs text-muted">{todaysWorkout.splitName}</p>
+            </div>
+
+            <div className="divide-y divide-border">
+              {todaysWorkout.exercises.map((ex) => (
+                <div key={ex.exerciseId} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{ex.exerciseName}</p>
+                    {ex.targetSets && ex.targetReps && (
+                      <span className="text-xs text-muted">{ex.targetSets}×{ex.targetReps}</span>
+                    )}
+                  </div>
+                  {ex.lastWeight !== null && (
+                    <div className="flex items-center gap-3 mt-1 text-xs">
+                      <span className="text-muted">Last: {ex.lastWeight}kg × {ex.lastReps}</span>
+                      {ex.suggestedWeight !== null && ex.suggestedWeight !== ex.lastWeight && (
+                        <span className="text-primary flex items-center gap-0.5">
+                          <TrendingUp className="h-3 w-3" />
+                          {ex.suggestedWeight}kg × {ex.suggestedReps}
+                        </span>
+                      )}
+                      {ex.suggestedReps !== null && ex.suggestedWeight === ex.lastWeight && ex.suggestedReps !== ex.lastReps && (
+                        <span className="text-primary flex items-center gap-0.5">
+                          <TrendingUp className="h-3 w-3" />
+                          {ex.suggestedWeight}kg × {ex.suggestedReps}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {ex.lastWeight === null && (
+                    <p className="text-xs text-muted mt-1">No previous data</p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-border">
+              <button
+                onClick={handleStartToday}
+                className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-semibold active:opacity-80 transition-opacity"
+              >
+                Start {todaysWorkout.splitDayName}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Empty workout option */}
         <button
-          onClick={startWorkout}
-          className="px-8 py-3 bg-primary text-primary-foreground rounded-xl font-semibold text-lg active:opacity-80 transition-opacity"
+          onClick={() => startWorkout()}
+          className={`w-full py-3 rounded-xl font-semibold active:opacity-80 transition-opacity ${
+            todaysWorkout ? "bg-secondary text-foreground" : "bg-primary text-primary-foreground text-lg"
+          }`}
         >
-          Start Workout
+          {todaysWorkout ? "Start Empty Workout" : "Start Workout"}
         </button>
       </div>
     );

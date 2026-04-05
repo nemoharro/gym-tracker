@@ -64,6 +64,8 @@ export type Database = {
           started_at: string
           finished_at: string | null
           notes: string | null
+          split_day_id: number | null
+          edited_at: string | null
         }
         Insert: {
           id?: number
@@ -71,6 +73,8 @@ export type Database = {
           started_at?: string
           finished_at?: string | null
           notes?: string | null
+          split_day_id?: number | null
+          edited_at?: string | null
         }
         Update: {
           id?: number
@@ -78,6 +82,8 @@ export type Database = {
           started_at?: string
           finished_at?: string | null
           notes?: string | null
+          split_day_id?: number | null
+          edited_at?: string | null
         }
         Relationships: []
       }
@@ -312,6 +318,105 @@ export type Database = {
           fat_g?: number
           fiber_g?: number | null
           sugar_g?: number | null
+        }
+        Relationships: []
+      }
+      workout_splits: {
+        Row: {
+          id: number
+          user_id: string
+          name: string
+          description: string | null
+          is_preset: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          name: string
+          description?: string | null
+          is_preset?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          name?: string
+          description?: string | null
+          is_preset?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      split_days: {
+        Row: {
+          id: number
+          split_id: number
+          name: string
+          day_order: number
+        }
+        Insert: {
+          id?: number
+          split_id: number
+          name: string
+          day_order: number
+        }
+        Update: {
+          id?: number
+          split_id?: number
+          name?: string
+          day_order?: number
+        }
+        Relationships: []
+      }
+      split_day_exercises: {
+        Row: {
+          id: number
+          split_day_id: number
+          exercise_id: number
+          order_index: number
+          target_sets: number | null
+          target_reps: number | null
+        }
+        Insert: {
+          id?: number
+          split_day_id: number
+          exercise_id: number
+          order_index: number
+          target_sets?: number | null
+          target_reps?: number | null
+        }
+        Update: {
+          id?: number
+          split_day_id?: number
+          exercise_id?: number
+          order_index?: number
+          target_sets?: number | null
+          target_reps?: number | null
+        }
+        Relationships: []
+      }
+      split_schedule: {
+        Row: {
+          id: number
+          user_id: string
+          day_of_week: number
+          split_day_id: number | null
+          is_rest_day: boolean
+        }
+        Insert: {
+          id?: number
+          user_id: string
+          day_of_week: number
+          split_day_id?: number | null
+          is_rest_day?: boolean
+        }
+        Update: {
+          id?: number
+          user_id?: string
+          day_of_week?: number
+          split_day_id?: number | null
+          is_rest_day?: boolean
         }
         Relationships: []
       }
