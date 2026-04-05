@@ -97,17 +97,17 @@ export default function DashboardPage() {
       // Weight (14 days)
       supabase.from("body_weight_logs").select("logged_at, weight_kg").eq("user_id", user.id)
         .gte("logged_at", formatDateISO(fourteenDaysAgo)).order("logged_at", { ascending: true }),
-      // Today's food
+      // Today's food (only finalized entries count)
       supabase.from("food_log").select("calories, protein, carbs, fat, fiber").eq("user_id", user.id)
-        .eq("logged_at", todayStr),
+        .eq("logged_at", todayStr).eq("status", "finalized"),
       // Nutrition targets
       supabase.from("nutrition_targets").select("*").eq("user_id", user.id).limit(1).maybeSingle(),
       // Streak: weight last 7 days
       supabase.from("body_weight_logs").select("logged_at").eq("user_id", user.id)
         .gte("logged_at", formatDateISO(sevenDaysAgo)),
-      // Streak: food last 7 days
+      // Streak: food last 7 days (only finalized)
       supabase.from("food_log").select("logged_at").eq("user_id", user.id)
-        .gte("logged_at", formatDateISO(sevenDaysAgo)),
+        .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
       // Streak: workouts last 7 days
       supabase.from("workout_sessions").select("started_at").eq("user_id", user.id)
         .gte("started_at", sevenDaysAgo.toISOString()),

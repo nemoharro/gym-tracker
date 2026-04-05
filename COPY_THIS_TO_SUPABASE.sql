@@ -101,7 +101,8 @@ create table public.food_log (
   fiber numeric(6,1),
   sugar numeric(6,1),
   saturated_fat numeric(6,1),
-  sodium numeric(6,1)
+  sodium numeric(6,1),
+  status text not null default 'draft'
 );
 
 -- Nutrition targets

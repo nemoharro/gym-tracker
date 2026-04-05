@@ -252,6 +252,7 @@ export type Database = {
           sugar: number | null
           saturated_fat: number | null
           sodium: number | null
+          status: string
         }
         Insert: {
           id?: number
@@ -270,6 +271,7 @@ export type Database = {
           sugar?: number | null
           saturated_fat?: number | null
           sodium?: number | null
+          status?: string
         }
         Update: {
           id?: number
@@ -288,6 +290,7 @@ export type Database = {
           sugar?: number | null
           saturated_fat?: number | null
           sodium?: number | null
+          status?: string
         }
         Relationships: []
       }

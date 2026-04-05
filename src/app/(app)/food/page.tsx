@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed, CheckCircle, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
@@ -124,6 +124,10 @@ export default function FoodPage() {
   const [mealPortion, setMealPortion] = useState("");
   const [mealLogging, setMealLogging] = useState(false);
 
+  // Finalize
+  const [dayFinalized, setDayFinalized] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+
   useEffect(() => {
     setBarcodeSupported(isBarcodeSupported());
   }, []);
@@ -161,8 +165,7 @@ export default function FoodPage() {
         .maybeSingle(),
       supabase
         .from("foods")
-        .select("id, name")
-        .eq("user_id", user.id),
+        .select("id, name"),
     ]);
 
     const foodMap = new Map<number, string>();
@@ -179,6 +182,12 @@ export default function FoodPage() {
           food_name: e.food_id ? foodMap.get(e.food_id) : undefined,
         }))
       );
+      // Check if day is finalized (all entries have status 'finalized')
+      const hasEntries = logRes.data.length > 0;
+      const allFinalized = hasEntries && logRes.data.every((e) => e.status === "finalized");
+      setDayFinalized(allFinalized);
+    } else {
+      setDayFinalized(false);
     }
 
     if (targetRes.data) {
@@ -252,9 +261,8 @@ export default function FoodPage() {
       const { data } = await supabase
         .from("foods")
         .select("id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g, fiber_per_100g")
-        .eq("user_id", user.id)
         .ilike("name", `%${foodName}%`)
-        .limit(5);
+        .limit(8);
 
       if (data && data.length > 0) {
         setSuggestions(data.map((f) => ({ ...f, fiber_per_100g: f.fiber_per_100g ?? 0 })));
@@ -332,12 +340,21 @@ export default function FoodPage() {
     const q = toGrams(parseFloat(quantity) || 100, quantityUnit);
     const multiplier = q / 100;
 
-    // Upsert food to avoid duplicates by name per user
-    const { data: food, error: foodError } = await supabase
+    // Save food: try to find existing first, then insert if needed
+    let foodId: number | null = null;
+    const trimmedName = foodName.trim();
+
+    const { data: existingFood } = await supabase
       .from("foods")
-      .upsert({
-        user_id: user.id,
-        name: foodName.trim(),
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("name", trimmedName)
+      .maybeSingle();
+
+    if (existingFood) {
+      foodId = existingFood.id;
+      // Update nutrition values
+      await supabase.from("foods").update({
         calories_per_100g: editableEstimate.calories,
         protein_per_100g: editableEstimate.protein,
         carbs_per_100g: editableEstimate.carbs,
@@ -346,22 +363,33 @@ export default function FoodPage() {
         sugar_per_100g: editableEstimate.sugar,
         saturated_fat_per_100g: editableEstimate.saturated_fat,
         sodium_per_100g: editableEstimate.sodium,
-        is_verified: false,
-      }, { onConflict: "name,user_id" })
-      .select("id")
-      .maybeSingle();
-
-    if (foodError) {
-      alert("Failed to save food. Please try again.");
-      setSaving(false);
-      return;
+      }).eq("id", existingFood.id);
+    } else {
+      const { data: newFood } = await supabase
+        .from("foods")
+        .insert({
+          user_id: user.id,
+          name: trimmedName,
+          calories_per_100g: editableEstimate.calories,
+          protein_per_100g: editableEstimate.protein,
+          carbs_per_100g: editableEstimate.carbs,
+          fat_per_100g: editableEstimate.fat,
+          fiber_per_100g: editableEstimate.fiber,
+          sugar_per_100g: editableEstimate.sugar,
+          saturated_fat_per_100g: editableEstimate.saturated_fat,
+          sodium_per_100g: editableEstimate.sodium,
+          is_verified: false,
+        })
+        .select("id")
+        .maybeSingle();
+      foodId = newFood?.id ?? null;
     }
 
     const { error: logError } = await supabase.from("food_log").insert({
       user_id: user.id,
       logged_at: dateStr,
       meal_type: "general",
-      food_id: food?.id ?? null,
+      food_id: foodId,
       quantity_g: q,
       servings: 1,
       calories: Math.round(editableEstimate.calories * multiplier),
@@ -372,6 +400,7 @@ export default function FoodPage() {
       sugar: Math.round(editableEstimate.sugar * multiplier * 10) / 10,
       saturated_fat: Math.round(editableEstimate.saturated_fat * multiplier * 10) / 10,
       sodium: Math.round(editableEstimate.sodium * multiplier * 10) / 10,
+      status: "draft",
     });
 
     if (logError) {
@@ -441,6 +470,7 @@ export default function FoodPage() {
       carbs: Math.round(recent.carbs_per_100g * mult * 10) / 10,
       fat: Math.round(recent.fat_per_100g * mult * 10) / 10,
       fiber: Math.round(recent.fiber_per_100g * mult * 10) / 10,
+      status: "draft",
     });
     fetchData();
   }
@@ -544,6 +574,7 @@ export default function FoodPage() {
         carbs: food.carbs,
         fat: food.fat,
         fiber: food.fiber,
+        status: "draft",
       });
     }
 
@@ -714,6 +745,7 @@ export default function FoodPage() {
       carbs: Math.round(selectedMeal.totalCarbs * ratio * 10) / 10,
       fat: Math.round(selectedMeal.totalFat * ratio * 10) / 10,
       fiber: Math.round(selectedMeal.totalFiber * ratio * 10) / 10,
+      status: "draft",
     });
 
     if (error) {
@@ -745,6 +777,7 @@ export default function FoodPage() {
       carbs: Math.round(selectedMeal.totalCarbs * 10) / 10,
       fat: Math.round(selectedMeal.totalFat * 10) / 10,
       fiber: Math.round(selectedMeal.totalFiber * 10) / 10,
+      status: "draft",
     });
 
     if (error) {
@@ -754,6 +787,48 @@ export default function FoodPage() {
     setMealLogging(false);
     setSelectedMeal(null);
     setShowMealPicker(false);
+    fetchData();
+  }
+
+  async function handleFinalizeDay() {
+    setFinalizing(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setFinalizing(false); return; }
+
+    const { error } = await supabase
+      .from("food_log")
+      .update({ status: "finalized" })
+      .eq("user_id", user.id)
+      .eq("logged_at", dateStr)
+      .eq("status", "draft");
+
+    if (error) {
+      alert("Failed to finalize day.");
+    } else {
+      setDayFinalized(true);
+    }
+    setFinalizing(false);
+    fetchData();
+  }
+
+  async function handleUnfinalizeDay() {
+    setFinalizing(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setFinalizing(false); return; }
+
+    const { error } = await supabase
+      .from("food_log")
+      .update({ status: "draft" })
+      .eq("user_id", user.id)
+      .eq("logged_at", dateStr)
+      .eq("status", "finalized");
+
+    if (error) {
+      alert("Failed to unfinalize day.");
+    } else {
+      setDayFinalized(false);
+    }
+    setFinalizing(false);
     fetchData();
   }
 
@@ -799,7 +874,7 @@ export default function FoodPage() {
         </button>
       </div>
 
-      {/* Quick links */}
+      {/* Quick links + Finalize */}
       <div className="flex gap-2">
         <Link
           href="/meals"
@@ -808,6 +883,27 @@ export default function FoodPage() {
           <BookOpen className="h-4 w-4" />
           My Meals
         </Link>
+        {entries.length > 0 && (
+          dayFinalized ? (
+            <button
+              onClick={handleUnfinalizeDay}
+              disabled={finalizing}
+              className="flex items-center gap-1.5 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg text-sm text-green-500 font-medium disabled:opacity-50"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {finalizing ? "..." : "Finalized"}
+            </button>
+          ) : (
+            <button
+              onClick={handleFinalizeDay}
+              disabled={finalizing}
+              className="flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" />
+              {finalizing ? "Finalizing..." : "Finalize Day"}
+            </button>
+          )
+        )}
       </div>
 
       {/* Macro summary with inline editing */}
@@ -831,25 +927,11 @@ export default function FoodPage() {
         {/* Add Food Actions */}
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowAddForm(!showAddForm); setShowAskAI(false); setShowCreateFood(false); setShowMealPicker(false); if (showAddForm) resetForm(); }}
+            onClick={() => { setShowAddForm(!showAddForm); setShowAskAI(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAddForm ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <Plus className="h-4 w-4" />
             Food
-          </button>
-          <button
-            onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); setShowMealPicker(false); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
-          >
-            <MessageCircle className="h-4 w-4" />
-            AI
-          </button>
-          <button
-            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowAskAI(false); setShowMealPicker(false); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
-          >
-            <PlusCircle className="h-3.5 w-3.5" />
-            New
           </button>
           {barcodeSupported && (
             <button
@@ -860,6 +942,20 @@ export default function FoodPage() {
               Scan
             </button>
           )}
+          <button
+            onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+          >
+            <MessageCircle className="h-4 w-4" />
+            AI
+          </button>
+          <button
+            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowAskAI(false); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            New
+          </button>
         </div>
 
         {/* Ask AI form */}
@@ -1103,6 +1199,8 @@ export default function FoodPage() {
                   </div>
                 );
               })()}
+            </>
+            )}
           </div>
         )}
 

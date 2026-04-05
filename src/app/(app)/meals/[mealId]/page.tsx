@@ -115,11 +115,10 @@ export default function MealDetailPage() {
     } = await supabase.auth.getUser();
     if (!user) { setSearching(false); return; }
 
-    // Search user's personal foods
+    // Search shared foods database
     const { data: userFoods } = await supabase
       .from("foods")
       .select("id, name, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g")
-      .eq("user_id", user.id)
       .ilike("name", `%${query}%`)
       .limit(10);
 
