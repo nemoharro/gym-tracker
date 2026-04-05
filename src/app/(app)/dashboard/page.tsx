@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Dumbbell, UtensilsCrossed, Flame, Loader2, Scale } from "lucide-react";
+import { Dumbbell, UtensilsCrossed, Flame, Loader2, Scale, Clock, TrendingUp, TrendingDown, Minus, Weight } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 
 const QUOTES = [
@@ -67,7 +67,6 @@ function getGreeting(): string {
 }
 
 function getDailyQuote(): string {
-  // Rotate based on day of year so it changes daily
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
@@ -94,12 +93,20 @@ function getDaysAgo(n: number): Date {
   return d;
 }
 
+function formatDuration(ms: number): string {
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="h-2 bg-secondary rounded-full overflow-hidden">
+    <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -109,6 +116,9 @@ export default function DashboardPage() {
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
 
+  // Profile
+  const [displayName, setDisplayName] = useState<string | null>(null);
+
   // Weekly training
   const [weekSessionDates, setWeekSessionDates] = useState<Set<number>>(new Set());
   const [scheduledDayCount, setScheduledDayCount] = useState(0);
@@ -116,6 +126,7 @@ export default function DashboardPage() {
   // Weight
   const [weightData, setWeightData] = useState<Array<{ date: string; weight: number }>>([]);
   const [todayWeight, setTodayWeight] = useState<number | null>(null);
+  const [weightChange, setWeightChange] = useState<number | null>(null);
 
   // Food
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
@@ -125,6 +136,12 @@ export default function DashboardPage() {
   const [currentStreak, setCurrentStreak] = useState(0);
   const [streakDays, setStreakDays] = useState<boolean[]>([]);
   const [streakDayLabels, setStreakDayLabels] = useState<string[]>([]);
+
+  // Weekly stats
+  const [weekVolume, setWeekVolume] = useState(0);
+  const [weekSets, setWeekSets] = useState(0);
+  const [weekTime, setWeekTime] = useState(0);
+  const [totalSessions, setTotalSessions] = useState(0);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -138,23 +155,31 @@ export default function DashboardPage() {
     sunday.setDate(sunday.getDate() + 6);
     const fourteenDaysAgo = getDaysAgo(14);
     const sevenDaysAgo = getDaysAgo(7);
+    const thirtyDaysAgo = getDaysAgo(30);
 
     const [
+      profileRes,
       weekSessionsRes,
       scheduleRes,
       weightRes,
+      weight30Res,
       foodTodayRes,
       targetsRes,
       streakWeightRes,
       streakFoodRes,
       streakWorkoutRes,
+      weekSetsRes,
+      allSessionsRes,
     ] = await Promise.all([
-      supabase.from("workout_sessions").select("started_at").eq("user_id", user.id)
+      supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle(),
+      supabase.from("workout_sessions").select("id, started_at, finished_at").eq("user_id", user.id)
         .gte("started_at", monday.toISOString())
         .lte("started_at", new Date(sunday.getTime() + 86400000).toISOString()),
       supabase.from("split_schedule").select("day_of_week, is_rest_day").eq("user_id", user.id),
       supabase.from("body_weight_logs").select("logged_at, weight_kg").eq("user_id", user.id)
         .gte("logged_at", formatDateISO(fourteenDaysAgo)).order("logged_at", { ascending: true }),
+      supabase.from("body_weight_logs").select("logged_at, weight_kg").eq("user_id", user.id)
+        .gte("logged_at", formatDateISO(thirtyDaysAgo)).order("logged_at", { ascending: true }),
       supabase.from("food_log").select("calories, protein, carbs, fat").eq("user_id", user.id)
         .eq("logged_at", todayStr).eq("status", "finalized"),
       supabase.from("nutrition_targets").select("*").eq("user_id", user.id).limit(1).maybeSingle(),
@@ -164,20 +189,50 @@ export default function DashboardPage() {
         .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
       supabase.from("workout_sessions").select("started_at").eq("user_id", user.id)
         .gte("started_at", sevenDaysAgo.toISOString()),
+      supabase.from("workout_sets").select("session_id, weight_kg, reps"),
+      supabase.from("workout_sessions").select("id").eq("user_id", user.id),
     ]);
+
+    // Profile
+    if (profileRes.data?.display_name) {
+      setDisplayName(profileRes.data.display_name);
+    }
 
     // Week sessions
     const sessionDays = new Set<number>();
+    let totalTime = 0;
     if (weekSessionsRes.data) {
       for (const s of weekSessionsRes.data) {
         const dow = new Date(s.started_at).getDay();
         sessionDays.add(dow === 0 ? 6 : dow - 1);
+        if (s.finished_at) {
+          totalTime += new Date(s.finished_at).getTime() - new Date(s.started_at).getTime();
+        }
       }
     }
     setWeekSessionDates(sessionDays);
+    setWeekTime(totalTime);
 
     if (scheduleRes.data) {
       setScheduledDayCount(scheduleRes.data.filter(s => !s.is_rest_day).length);
+    }
+
+    // Total sessions all time
+    setTotalSessions(allSessionsRes.data?.length ?? 0);
+
+    // Week volume and sets
+    if (weekSessionsRes.data && weekSetsRes.data) {
+      const weekSessionIds = new Set(weekSessionsRes.data.map(s => s.id));
+      let vol = 0;
+      let sets = 0;
+      for (const set of weekSetsRes.data) {
+        if (weekSessionIds.has(set.session_id)) {
+          vol += Number(set.weight_kg) * Number(set.reps);
+          sets++;
+        }
+      }
+      setWeekVolume(Math.round(vol));
+      setWeekSets(sets);
     }
 
     // Weight
@@ -188,6 +243,13 @@ export default function DashboardPage() {
       })));
       const todayEntry = weightRes.data.find(w => w.logged_at === todayStr);
       setTodayWeight(todayEntry ? Number(todayEntry.weight_kg) : null);
+    }
+
+    // Weight change over 30 days
+    if (weight30Res.data && weight30Res.data.length >= 2) {
+      const first = Number(weight30Res.data[0].weight_kg);
+      const last = Number(weight30Res.data[weight30Res.data.length - 1].weight_kg);
+      setWeightChange(Math.round((last - first) * 10) / 10);
     }
 
     // Food
@@ -268,12 +330,13 @@ export default function DashboardPage() {
   }
 
   const t = nutritionTargets ?? { calories: 2500, protein: 180, carbs: 250, fat: 80 };
+  const greeting = displayName ? `${getGreeting()}, ${displayName}` : getGreeting();
 
   return (
     <div className="p-5 space-y-5">
       {/* Greeting + Quote */}
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold">{getGreeting()}</h1>
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold">{greeting}</h1>
         <p className="text-sm text-muted italic leading-relaxed">
           &ldquo;{getDailyQuote()}&rdquo;
         </p>
@@ -283,14 +346,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3">
         <Link
           href="/workout"
-          className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl p-4 text-sm font-semibold active:opacity-80"
+          className="flex items-center justify-center gap-2.5 bg-primary text-primary-foreground rounded-xl p-5 text-base font-semibold active:opacity-80"
         >
           <Dumbbell className="h-5 w-5" />
           Start Workout
         </Link>
         <Link
           href="/food"
-          className="flex items-center justify-center gap-2 bg-card border border-border rounded-xl p-4 text-sm font-semibold active:opacity-80"
+          className="flex items-center justify-center gap-2.5 bg-card border border-border rounded-xl p-5 text-base font-semibold active:opacity-80"
         >
           <UtensilsCrossed className="h-5 w-5" />
           Log Food
@@ -298,11 +361,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Daily Streak */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Flame className="h-5 w-5 text-orange-500" />
-            <span className="text-sm font-semibold">
+            <span className="text-base font-semibold">
               {currentStreak > 0 ? `${currentStreak} day streak` : "Start your streak"}
             </span>
           </div>
@@ -310,49 +373,68 @@ export default function DashboardPage() {
         </div>
         <div className="flex justify-around">
           {streakDays.map((complete, i) => (
-            <div key={i} className="flex flex-col items-center gap-1">
-              <span className={`text-lg ${complete ? "" : "opacity-20"}`}>
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <span className={`text-xl ${complete ? "" : "opacity-20"}`}>
                 {complete ? "\uD83D\uDD25" : "\u26AA"}
               </span>
-              <span className="text-xs text-muted">{streakDayLabels[i]}</span>
+              <span className="text-xs text-muted font-medium">{streakDayLabels[i]}</span>
             </div>
           ))}
         </div>
       </div>
 
+      {/* Weekly Stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-card border border-border rounded-xl p-4 text-center">
+          <Weight className="h-5 w-5 text-primary mx-auto mb-2" />
+          <p className="text-lg font-bold">{weekVolume > 1000 ? `${(weekVolume / 1000).toFixed(1)}t` : `${weekVolume}kg`}</p>
+          <p className="text-xs text-muted mt-0.5">Volume</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4 text-center">
+          <Dumbbell className="h-5 w-5 text-primary mx-auto mb-2" />
+          <p className="text-lg font-bold">{weekSets}</p>
+          <p className="text-xs text-muted mt-0.5">Sets</p>
+        </div>
+        <div className="bg-card border border-border rounded-xl p-4 text-center">
+          <Clock className="h-5 w-5 text-primary mx-auto mb-2" />
+          <p className="text-lg font-bold">{weekTime > 0 ? formatDuration(weekTime) : "—"}</p>
+          <p className="text-xs text-muted mt-0.5">Gym Time</p>
+        </div>
+      </div>
+
       {/* Nutrition */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-semibold">Nutrition</span>
-          <span className="text-xs text-muted">
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-base font-semibold">Today&apos;s Nutrition</span>
+          <span className="text-sm text-muted">
             {Math.round(t.calories - todayMacros.calories)} kcal left
           </span>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
-            <div className="flex justify-between text-xs mb-1">
+            <div className="flex justify-between text-sm mb-1.5">
               <span className="text-muted">Calories</span>
-              <span className="font-medium">{Math.round(todayMacros.calories)} / {t.calories}</span>
+              <span className="font-semibold">{Math.round(todayMacros.calories)} / {t.calories}</span>
             </div>
             <MiniBar value={todayMacros.calories} max={t.calories} color="bg-primary" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-4">
             <div>
-              <div className="flex justify-between text-xs text-muted mb-1">
+              <div className="flex justify-between text-xs text-muted mb-1.5">
                 <span>Protein</span>
                 <span>{Math.round(todayMacros.protein)}/{t.protein}g</span>
               </div>
               <MiniBar value={todayMacros.protein} max={t.protein} color="bg-red-500" />
             </div>
             <div>
-              <div className="flex justify-between text-xs text-muted mb-1">
+              <div className="flex justify-between text-xs text-muted mb-1.5">
                 <span>Carbs</span>
                 <span>{Math.round(todayMacros.carbs)}/{t.carbs}g</span>
               </div>
               <MiniBar value={todayMacros.carbs} max={t.carbs} color="bg-yellow-500" />
             </div>
             <div>
-              <div className="flex justify-between text-xs text-muted mb-1">
+              <div className="flex justify-between text-xs text-muted mb-1.5">
                 <span>Fat</span>
                 <span>{Math.round(todayMacros.fat)}/{t.fat}g</span>
               </div>
@@ -366,9 +448,9 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3">
         {/* This Week */}
         <div className="bg-card border border-border rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-semibold">This Week</span>
-            <span className="text-xs text-muted">
+            <span className="text-xs text-muted font-medium">
               {weekSessionDates.size}{scheduledDayCount > 0 ? `/${scheduledDayCount}` : ""}
             </span>
           </div>
@@ -376,7 +458,7 @@ export default function DashboardPage() {
             {DAY_LABELS.map((label, i) => (
               <div
                 key={i}
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
                   weekSessionDates.has(i)
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-muted"
@@ -396,7 +478,7 @@ export default function DashboardPage() {
               Weight
             </span>
             {todayWeight && (
-              <span className="text-sm font-semibold">{todayWeight.toFixed(1)}kg</span>
+              <span className="text-sm font-bold">{todayWeight.toFixed(1)}kg</span>
             )}
           </div>
           {weightData.length > 1 ? (
@@ -417,8 +499,30 @@ export default function DashboardPage() {
           ) : (
             <Link href="/weight" className="text-xs text-primary font-medium">Log weight</Link>
           )}
+          {weightChange !== null && (
+            <div className="flex items-center gap-1 mt-2">
+              {weightChange < 0 ? (
+                <TrendingDown className="h-3.5 w-3.5 text-success" />
+              ) : weightChange > 0 ? (
+                <TrendingUp className="h-3.5 w-3.5 text-destructive" />
+              ) : (
+                <Minus className="h-3.5 w-3.5 text-muted" />
+              )}
+              <span className="text-xs text-muted">
+                {weightChange > 0 ? "+" : ""}{weightChange}kg / 30d
+              </span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* All-time sessions */}
+      {totalSessions > 0 && (
+        <div className="bg-card border border-border rounded-xl p-5 text-center">
+          <p className="text-3xl font-bold text-primary">{totalSessions}</p>
+          <p className="text-sm text-muted mt-1">total sessions logged</p>
+        </div>
+      )}
     </div>
   );
 }
