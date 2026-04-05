@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, Zap, RotateCcw } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, Zap, RotateCcw, ScanBarcode, PlusCircle } from "lucide-react";
 import Link from "next/link";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
+import { BarcodeScanner, isBarcodeSupported } from "@/components/BarcodeScanner";
 
 interface FoodLogEntry {
   id: number;
@@ -88,6 +89,25 @@ export default function FoodPage() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [quickCalories, setQuickCalories] = useState("");
   const [quickName, setQuickName] = useState("");
+
+  // Custom food creation
+  const [showCreateFood, setShowCreateFood] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createCal, setCreateCal] = useState("");
+  const [createProtein, setCreateProtein] = useState("");
+  const [createCarbs, setCreateCarbs] = useState("");
+  const [createFat, setCreateFat] = useState("");
+  const [createFiber, setCreateFiber] = useState("");
+  const [creatingSaving, setCreatingSaving] = useState(false);
+
+  // Barcode scanning
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [barcodeSupported, setBarcodeSupported] = useState(false);
+
+  useEffect(() => {
+    setBarcodeSupported(isBarcodeSupported());
+  }, []);
 
   const { isListening, transcript, isSupported, startListening, stopListening } = useSpeechRecognition();
 
@@ -287,7 +307,7 @@ export default function FoodPage() {
     setSaving(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) { setSaving(false); return; }
 
     const q = parseFloat(quantity) || 100;
     const multiplier = q / 100;
@@ -309,7 +329,7 @@ export default function FoodPage() {
         is_verified: false,
       }, { onConflict: "name,user_id" })
       .select("id")
-      .single();
+      .maybeSingle();
 
     if (foodError) {
       alert("Failed to save food. Please try again.");
@@ -457,6 +477,88 @@ export default function FoodPage() {
     fetchData();
   }
 
+  async function handleCreateFood() {
+    if (!createName.trim() || !createCal) return;
+    setCreatingSaving(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from("foods").insert({
+      user_id: user.id,
+      name: createName.trim(),
+      calories_per_100g: parseFloat(createCal) || 0,
+      protein_per_100g: parseFloat(createProtein) || 0,
+      carbs_per_100g: parseFloat(createCarbs) || 0,
+      fat_per_100g: parseFloat(createFat) || 0,
+      fiber_per_100g: parseFloat(createFiber) || 0,
+      is_verified: false,
+    });
+
+    if (error) {
+      alert("Failed to save food. It may already exist.");
+      setCreatingSaving(false);
+      return;
+    }
+
+    setCreateName(""); setCreateCal(""); setCreateProtein(""); setCreateCarbs("");
+    setCreateFat(""); setCreateFiber("");
+    setShowCreateFood(false);
+    setCreatingSaving(false);
+  }
+
+  async function handleBarcodeScan(barcode: string) {
+    setScannerOpen(false);
+    setScanLoading(true);
+    setShowAddForm(true);
+    setShowQuickAdd(false);
+    setShowCreateFood(false);
+
+    try {
+      const res = await fetch("/api/barcode-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ barcode }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setFoodName(data.product_name + (data.brand ? ` (${data.brand})` : ""));
+        setEditableEstimate({
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat,
+          fiber: data.fiber,
+          sugar: data.sugar,
+          saturated_fat: data.saturated_fat,
+          sodium: data.sodium,
+          source: "barcode",
+          product_name: data.product_name,
+          brand: data.brand,
+        });
+        setEstimated({
+          calories: data.calories,
+          protein: data.protein,
+          carbs: data.carbs,
+          fat: data.fat,
+          fiber: data.fiber,
+          sugar: data.sugar,
+          saturated_fat: data.saturated_fat,
+          sodium: data.sodium,
+        });
+      } else {
+        setEstimateError("Product not found. Try creating it manually.");
+        setShowCreateFood(true);
+        setShowAddForm(false);
+      }
+    } catch {
+      setEstimateError("Failed to look up barcode.");
+    } finally {
+      setScanLoading(false);
+    }
+  }
+
   async function handleTargetsChange(newTargets: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -556,14 +658,21 @@ export default function FoodPage() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => { setShowQuickAdd(!showQuickAdd); setShowAddForm(false); }}
+                onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowQuickAdd(false); }}
+                className="flex items-center gap-1 text-sm text-muted font-medium"
+              >
+                <PlusCircle className="h-3.5 w-3.5" />
+                Create
+              </button>
+              <button
+                onClick={() => { setShowQuickAdd(!showQuickAdd); setShowAddForm(false); setShowCreateFood(false); }}
                 className="flex items-center gap-1 text-sm text-muted font-medium"
               >
                 <Zap className="h-3.5 w-3.5" />
                 Quick
               </button>
               <button
-                onClick={() => { setShowAddForm(!showAddForm); setShowQuickAdd(false); if (showAddForm) resetForm(); }}
+                onClick={() => { setShowAddForm(!showAddForm); setShowQuickAdd(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
                 className="flex items-center gap-1 text-sm text-primary font-medium"
               >
                 <Plus className="h-4 w-4" />
@@ -601,6 +710,46 @@ export default function FoodPage() {
                 className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
               >
                 Log {quickCalories ? `${quickCalories} kcal` : ""}
+              </button>
+            </div>
+          )}
+
+          {/* Create custom food form */}
+          {showCreateFood && (
+            <div className="p-4 border-b border-border bg-secondary/30 space-y-3">
+              <p className="text-xs text-muted font-medium">Create custom food (per 100g)</p>
+              <input
+                type="text"
+                placeholder="Food name"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+              />
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { label: "Calories", value: createCal, set: setCreateCal },
+                  { label: "Protein (g)", value: createProtein, set: setCreateProtein },
+                  { label: "Carbs (g)", value: createCarbs, set: setCreateCarbs },
+                  { label: "Fat (g)", value: createFat, set: setCreateFat },
+                  { label: "Fiber (g)", value: createFiber, set: setCreateFiber },
+                ] as const).map(({ label, value, set }) => (
+                  <div key={label}>
+                    <label className="text-xs text-muted block mb-1">{label}</label>
+                    <input
+                      type="number"
+                      value={value}
+                      onChange={(e) => set(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded-lg bg-background border border-border text-sm text-center focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={handleCreateFood}
+                disabled={creatingSaving || !createName.trim() || !createCal}
+                className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+              >
+                {creatingSaving ? "Saving..." : "Save Food"}
               </button>
             </div>
           )}
@@ -673,6 +822,15 @@ export default function FoodPage() {
                     onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                     className={`flex-1 px-3 py-2 rounded-lg bg-background border text-sm focus:outline-none focus:border-primary ${isListening ? "border-primary ring-2 ring-primary/30 animate-pulse" : "border-border"}`}
                   />
+                  {barcodeSupported && (
+                    <button
+                      type="button"
+                      onClick={() => setScannerOpen(true)}
+                      className="p-2 rounded-lg border border-border bg-secondary text-muted hover:text-foreground transition-colors"
+                    >
+                      <ScanBarcode className="h-5 w-5" />
+                    </button>
+                  )}
                   {isSupported && (
                     <button
                       type="button"
@@ -788,6 +946,23 @@ export default function FoodPage() {
               })()}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Barcode scanner modal */}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleBarcodeScan}
+      />
+
+      {/* Scan loading overlay */}
+      {scanLoading && (
+        <div className="fixed inset-0 z-40 bg-background/80 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-sm">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Looking up product...
+          </div>
         </div>
       )}
     </div>
