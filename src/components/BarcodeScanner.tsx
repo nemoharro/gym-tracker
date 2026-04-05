@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 
 interface BarcodeScannerProps {
   open: boolean;
@@ -9,94 +9,72 @@ interface BarcodeScannerProps {
   onScan: (barcode: string) => void;
 }
 
+// Always show the barcode button — html5-qrcode works on all mobile browsers
 export function isBarcodeSupported(): boolean {
   if (typeof window === "undefined") return false;
-  return "BarcodeDetector" in window;
+  return !!navigator.mediaDevices;
 }
 
 export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const scannerRef = useRef<any>(null);
+  const containerRef = useRef<string>("barcode-scanner-container");
   const [error, setError] = useState("");
-  const [scanning, setScanning] = useState(false);
   const detectedRef = useRef(false);
 
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
-    if (!open) {
-      stopCamera();
-      detectedRef.current = false;
-      return;
-    }
+    if (!open) return;
 
-    let cancelled = false;
+    let scanner: any = null;
+    detectedRef.current = false;
+    setError("");
 
-    async function startScanning() {
-      setError("");
-      setScanning(true);
-      detectedRef.current = false;
-
+    async function start() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-        });
+        const { Html5Qrcode } = await import("html5-qrcode");
+        scanner = new Html5Qrcode(containerRef.current);
+        scannerRef.current = scanner;
 
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-
-        const BarcodeDetectorClass = (window as any).BarcodeDetector;
-        const detector = new BarcodeDetectorClass({
-          formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
-        });
-
-        const detect = async () => {
-          if (cancelled || detectedRef.current || !videoRef.current) return;
-
-          try {
-            const barcodes = await detector.detect(videoRef.current);
-            if (barcodes.length > 0 && !detectedRef.current) {
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 120 },
+            aspectRatio: 1.777,
+          },
+          (decodedText: string) => {
+            if (!detectedRef.current) {
               detectedRef.current = true;
-              const code = barcodes[0].rawValue;
-              stopCamera();
-              onScan(code);
+              scanner.stop().catch(() => {});
+              onScan(decodedText);
             }
-          } catch {
-            // Detection frame error — ignore and retry
+          },
+          () => {
+            // Ignore scan failures (no barcode in frame)
           }
-
-          if (!cancelled && !detectedRef.current) {
-            requestAnimationFrame(detect);
-          }
-        };
-
-        detect();
+        );
       } catch (err) {
-        if (!cancelled) {
-          setError("Could not access camera. Please allow camera access.");
-        }
-      } finally {
-        setScanning(false);
+        setError("Could not access camera. Please allow camera access and try again.");
       }
     }
 
-    startScanning();
+    start();
 
     return () => {
-      cancelled = true;
-      stopCamera();
+      if (scanner) {
+        scanner.stop().catch(() => {});
+        scanner.clear().catch(() => {});
+      }
     };
-  }, [open, onScan, stopCamera]);
+  }, [open, onScan]);
+
+  function handleClose() {
+    if (scannerRef.current) {
+      scannerRef.current.stop().catch(() => {});
+      scannerRef.current.clear().catch(() => {});
+      scannerRef.current = null;
+    }
+    onClose();
+  }
 
   if (!open) return null;
 
@@ -104,31 +82,13 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between p-4">
         <h2 className="text-white font-semibold">Scan Barcode</h2>
-        <button
-          onClick={() => { stopCamera(); onClose(); }}
-          className="p-2 text-white"
-        >
+        <button onClick={handleClose} className="p-2 text-white">
           <X className="h-6 w-6" />
         </button>
       </div>
 
-      <div className="flex-1 relative">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          playsInline
-          muted
-          autoPlay
-        />
-        {/* Scan guide overlay */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-64 h-32 border-2 border-white/60 rounded-xl" />
-        </div>
-        {scanning && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-white" />
-          </div>
-        )}
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div id={containerRef.current} className="w-full max-w-md" />
       </div>
 
       {error && (

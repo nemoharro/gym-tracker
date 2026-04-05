@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell, History, TrendingUp, UtensilsCrossed, LayoutGrid } from "lucide-react";
+import { Dumbbell, History, LayoutDashboard, UtensilsCrossed, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/workout", label: "Workout", icon: Dumbbell },
-  { href: "/history", label: "History", icon: History },
-  { href: "/progress", label: "Progress", icon: TrendingUp },
   { href: "/food", label: "Food", icon: UtensilsCrossed },
+  { href: "/history", label: "History", icon: History },
   { href: "/splits", label: "Splits", icon: LayoutGrid },
 ];
 
