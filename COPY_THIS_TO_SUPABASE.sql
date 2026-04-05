@@ -23,7 +23,9 @@ create table public.workout_sessions (
   user_id uuid references auth.users(id) not null,
   started_at timestamptz default now(),
   finished_at timestamptz,
-  notes text
+  notes text,
+  split_day_id integer,
+  edited_at timestamptz
 );
 
 -- Workout sets
@@ -56,8 +58,13 @@ create table public.foods (
   protein_per_100g numeric(5,1) not null,
   carbs_per_100g numeric(5,1) not null,
   fat_per_100g numeric(5,1) not null,
+  fiber_per_100g numeric(5,1),
+  sugar_per_100g numeric(5,1),
+  saturated_fat_per_100g numeric(5,1),
+  sodium_per_100g numeric(5,1),
   is_verified boolean default false,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique(name, user_id)
 );
 
 -- Saved meal templates
@@ -89,7 +96,11 @@ create table public.food_log (
   calories numeric(7,1) not null,
   protein numeric(6,1) not null,
   carbs numeric(6,1) not null,
-  fat numeric(6,1) not null
+  fat numeric(6,1) not null,
+  fiber numeric(6,1),
+  sugar numeric(6,1),
+  saturated_fat numeric(6,1),
+  sodium numeric(6,1)
 );
 
 -- Nutrition targets
@@ -99,7 +110,9 @@ create table public.nutrition_targets (
   calories numeric(7,1),
   protein_g numeric(5,1),
   carbs_g numeric(5,1),
-  fat_g numeric(5,1)
+  fat_g numeric(5,1),
+  fiber_g numeric(5,1),
+  sugar_g numeric(5,1)
 );
 
 -- Push subscriptions
@@ -110,6 +123,46 @@ create table public.push_subscriptions (
   created_at timestamptz default now()
 );
 
+-- Workout splits
+create table public.workout_splits (
+  id serial primary key,
+  user_id uuid not null references auth.users(id),
+  name text not null,
+  description text,
+  is_preset boolean default false,
+  created_at timestamptz default now()
+);
+
+create table public.split_days (
+  id serial primary key,
+  split_id integer not null references public.workout_splits(id) on delete cascade,
+  name text not null,
+  day_order smallint not null
+);
+
+create table public.split_day_exercises (
+  id serial primary key,
+  split_day_id integer not null references public.split_days(id) on delete cascade,
+  exercise_id integer not null references public.exercises(id),
+  order_index smallint not null,
+  target_sets smallint,
+  target_reps smallint
+);
+
+create table public.split_schedule (
+  id serial primary key,
+  user_id uuid not null references auth.users(id),
+  day_of_week smallint not null,
+  split_day_id integer references public.split_days(id) on delete set null,
+  is_rest_day boolean default false,
+  unique(user_id, day_of_week)
+);
+
+-- Add FK for split_day_id on workout_sessions now that split_days exists
+alter table public.workout_sessions
+  add constraint fk_workout_sessions_split_day
+  foreign key (split_day_id) references public.split_days(id);
+
 -- Indexes
 create index idx_workout_sets_session on public.workout_sets(session_id);
 create index idx_workout_sets_exercise on public.workout_sets(exercise_id);
@@ -117,6 +170,9 @@ create index idx_workout_sessions_user_date on public.workout_sessions(user_id, 
 create index idx_body_weight_user_date on public.body_weight_logs(user_id, logged_at desc);
 create index idx_food_log_user_date on public.food_log(user_id, logged_at desc);
 create index idx_foods_user on public.foods(user_id);
+create index idx_split_days_split on public.split_days(split_id);
+create index idx_split_day_exercises_day on public.split_day_exercises(split_day_id);
+create index idx_split_schedule_user on public.split_schedule(user_id);
 
 -- Row Level Security
 alter table public.profiles enable row level security;
@@ -130,6 +186,10 @@ alter table public.meal_ingredients enable row level security;
 alter table public.food_log enable row level security;
 alter table public.nutrition_targets enable row level security;
 alter table public.push_subscriptions enable row level security;
+alter table public.workout_splits enable row level security;
+alter table public.split_days enable row level security;
+alter table public.split_day_exercises enable row level security;
+alter table public.split_schedule enable row level security;
 
 -- RLS Policies
 create policy "Users read own profile" on public.profiles for select using (auth.uid() = id);
@@ -150,6 +210,10 @@ create policy "Users manage own meal ingredients" on public.meal_ingredients for
 create policy "Users manage own food log" on public.food_log for all using (auth.uid() = user_id);
 create policy "Users manage own nutrition targets" on public.nutrition_targets for all using (auth.uid() = user_id);
 create policy "Users manage own push subs" on public.push_subscriptions for all using (auth.uid() = user_id);
+create policy "Users manage own splits" on public.workout_splits for all using (auth.uid() = user_id);
+create policy "Users manage own split days" on public.split_days for all using (split_id in (select id from public.workout_splits where user_id = auth.uid()));
+create policy "Users manage own split day exercises" on public.split_day_exercises for all using (split_day_id in (select sd.id from public.split_days sd join public.workout_splits ws on sd.split_id = ws.id where ws.user_id = auth.uid()));
+create policy "Users manage own schedule" on public.split_schedule for all using (auth.uid() = user_id);
 
 -- SEED DATA: System exercises
 INSERT INTO public.exercises (name, muscle_group, equipment, is_custom, created_by) VALUES ('Flat Bench Press', 'Chest', 'barbell', false, NULL);

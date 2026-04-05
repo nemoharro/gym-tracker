@@ -111,8 +111,12 @@ export async function POST(request: Request) {
   const body = await request.json();
   const foodName = body.food as string;
 
-  if (!foodName) {
+  if (!foodName || typeof foodName !== "string") {
     return NextResponse.json({ error: "Missing food name" }, { status: 400 });
+  }
+
+  if (foodName.length > 200) {
+    return NextResponse.json({ error: "Food name too long" }, { status: 400 });
   }
 
   // Try local database first

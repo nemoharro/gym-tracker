@@ -166,23 +166,35 @@ export function useSplits() {
   }
 
   async function deleteSplit(splitId: number) {
-    await supabase.from("workout_splits").delete().eq("id", splitId);
+    const { error } = await supabase.from("workout_splits").delete().eq("id", splitId);
+    if (error) {
+      alert("Failed to delete split. Please try again.");
+      return;
+    }
     await fetchSplits();
   }
 
   async function addExerciseToDay(splitDayId: number, exerciseId: number, currentCount: number, targetSets?: number, targetReps?: number) {
-    await supabase.from("split_day_exercises").insert({
+    const { error } = await supabase.from("split_day_exercises").insert({
       split_day_id: splitDayId,
       exercise_id: exerciseId,
       order_index: currentCount,
       target_sets: targetSets ?? null,
       target_reps: targetReps ?? null,
     });
+    if (error) {
+      alert("Failed to add exercise. Please try again.");
+      return;
+    }
     await fetchSplits();
   }
 
   async function removeExerciseFromDay(exerciseRowId: number) {
-    await supabase.from("split_day_exercises").delete().eq("id", exerciseRowId);
+    const { error } = await supabase.from("split_day_exercises").delete().eq("id", exerciseRowId);
+    if (error) {
+      alert("Failed to remove exercise. Please try again.");
+      return;
+    }
     await fetchSplits();
   }
 

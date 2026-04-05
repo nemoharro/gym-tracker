@@ -148,14 +148,20 @@ export default function SessionDetailPage() {
     setSaving(true);
 
     // Update notes
-    await supabase
+    const { error: notesError } = await supabase
       .from("workout_sessions")
       .update({ notes: editNotes || null, edited_at: new Date().toISOString() })
       .eq("id", sessionId);
 
+    if (notesError) {
+      alert("Failed to save notes. Please try again.");
+      setSaving(false);
+      return;
+    }
+
     // Update each set
     for (const [setId, values] of editSets) {
-      await supabase
+      const { error: setError } = await supabase
         .from("workout_sets")
         .update({
           weight_kg: values.weight_kg,
@@ -163,6 +169,12 @@ export default function SessionDetailPage() {
           rpe: values.rpe,
         })
         .eq("id", setId);
+
+      if (setError) {
+        alert("Failed to save a set. Please try again.");
+        setSaving(false);
+        return;
+      }
     }
 
     setSaving(false);
@@ -171,18 +183,26 @@ export default function SessionDetailPage() {
   }
 
   async function handleDeleteSet(setId: number) {
-    await supabase.from("workout_sets").delete().eq("id", setId);
+    const { error } = await supabase.from("workout_sets").delete().eq("id", setId);
+    if (error) {
+      alert("Failed to delete set. Please try again.");
+      return;
+    }
     fetchSession();
   }
 
   async function handleAddSet(exerciseId: number, currentSetCount: number) {
-    await supabase.from("workout_sets").insert({
+    const { error } = await supabase.from("workout_sets").insert({
       session_id: sessionId,
       exercise_id: exerciseId,
       set_number: currentSetCount + 1,
       weight_kg: 0,
       reps: 0,
     });
+    if (error) {
+      alert("Failed to add set. Please try again.");
+      return;
+    }
     fetchSession();
     // Re-enter edit mode to edit the new set
     setTimeout(() => startEditing(), 300);

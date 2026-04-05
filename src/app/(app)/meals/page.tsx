@@ -100,13 +100,19 @@ export default function MealsPage() {
       .delete()
       .eq("meal_id", id);
 
-    if (ingError) return;
+    if (ingError) {
+      alert("Failed to delete meal ingredients. Please try again.");
+      return;
+    }
 
     const { error } = await supabase.from("meals").delete().eq("id", id);
 
-    if (!error) {
-      setMeals((prev) => prev.filter((m) => m.id !== id));
+    if (error) {
+      alert("Failed to delete meal. Please try again.");
+      return;
     }
+
+    setMeals((prev) => prev.filter((m) => m.id !== id));
   }
 
   return (

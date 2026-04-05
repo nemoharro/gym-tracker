@@ -76,18 +76,26 @@ export default function WeightPage() {
     if (!user) return;
 
     if (todayLog) {
-      // Update existing
-      await supabase
+      const { error } = await supabase
         .from("body_weight_logs")
         .update({ weight_kg: weight })
         .eq("id", todayLog.id);
+      if (error) {
+        alert("Failed to update weight. Please try again.");
+        setSaving(false);
+        return;
+      }
     } else {
-      // Insert new
-      await supabase.from("body_weight_logs").insert({
+      const { error } = await supabase.from("body_weight_logs").insert({
         user_id: user.id,
         weight_kg: weight,
         logged_at: today,
       });
+      if (error) {
+        alert("Failed to log weight. Please try again.");
+        setSaving(false);
+        return;
+      }
     }
 
     setSaving(false);

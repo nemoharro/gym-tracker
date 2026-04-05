@@ -75,8 +75,21 @@ export function MacroSummary({ calories, protein, carbs, fat, fiber, targets, on
     else if (key === "fat") setEditFat(value);
   }
 
+  const remainingCal = Math.round(t.calories - calories);
+
   return (
     <div className="space-y-3 p-4 bg-card rounded-xl border border-border">
+      {/* Remaining calories hero */}
+      {!isEditing && (
+        <div className="text-center pb-2 border-b border-border">
+          <p className={`text-3xl font-bold ${remainingCal < 0 ? "text-destructive" : "text-foreground"}`}>
+            {Math.abs(remainingCal)}
+          </p>
+          <p className="text-xs text-muted">
+            {remainingCal >= 0 ? "kcal remaining" : "kcal over"}
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">Daily Nutrition</span>
         {onTargetsChange && !isEditing && (
@@ -128,6 +141,13 @@ export function MacroSummary({ calories, protein, carbs, fat, fiber, targets, on
                 style={{ width: `${pct}%` }}
               />
             </div>
+            {!isEditing && (
+              <p className={`text-xs mt-0.5 ${isOver ? "text-destructive" : "text-muted"}`}>
+                {isOver
+                  ? `${Math.round(m.current - m.target)} ${m.unit} over`
+                  : `${Math.round(m.target - m.current)} ${m.unit} left`}
+              </p>
+            )}
           </div>
         );
       })}

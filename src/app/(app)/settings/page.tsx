@@ -69,13 +69,14 @@ export default function SettingsPage() {
       fiber_g: parseInt(fiber) || 30,
     };
 
-    if (existing) {
-      await supabase
-        .from("nutrition_targets")
-        .update(values)
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("nutrition_targets").insert(values);
+    const { error } = existing
+      ? await supabase.from("nutrition_targets").update(values).eq("id", existing.id)
+      : await supabase.from("nutrition_targets").insert(values);
+
+    if (error) {
+      alert("Failed to save targets. Please try again.");
+      setSaving(false);
+      return;
     }
 
     setSaving(false);

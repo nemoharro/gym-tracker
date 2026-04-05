@@ -82,10 +82,12 @@ export function useProgressData(exerciseId: number | null) {
         const heaviestSet = session.sets.reduce((best, s) =>
           s.weight > best.weight ? s : best
         );
+        // Brzycki formula — only accurate up to ~36 reps
+        const clampedReps = Math.min(heaviestSet.reps, 36);
         const estimatedOneRM =
-          heaviestSet.reps === 1
+          clampedReps === 1
             ? heaviestSet.weight
-            : heaviestSet.weight * (36 / (37 - heaviestSet.reps));
+            : heaviestSet.weight * (36 / (37 - clampedReps));
 
         points.push({
           date: new Date(session.date).toLocaleDateString("en-AU", {

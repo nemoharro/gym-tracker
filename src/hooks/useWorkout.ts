@@ -107,10 +107,15 @@ export const useWorkout = create<WorkoutState>((set, get) => ({
     if (!sessionId) return;
 
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("workout_sessions")
       .update({ finished_at: new Date().toISOString(), notes })
       .eq("id", sessionId);
+
+    if (error) {
+      alert("Failed to finish workout. Please try again.");
+      return;
+    }
 
     set({
       isActive: false,
