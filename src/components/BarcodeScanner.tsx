@@ -17,6 +17,7 @@ export function isBarcodeSupported(): boolean {
 export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   const scannerRef = useRef<any>(null);
   const [error, setError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
   const detectedRef = useRef(false);
   const onScanRef = useRef(onScan);
   onScanRef.current = onScan;
@@ -101,7 +102,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         scanner.clear().catch(() => {});
       }
     };
-  }, [open]);
+  }, [open, retryCount]);
 
   function handleClose() {
     if (scannerRef.current) {
@@ -131,7 +132,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         <div className="p-4 text-center">
           <p className="text-red-400 text-sm">{error}</p>
           <button
-            onClick={() => { setError(""); detectedRef.current = false; }}
+            onClick={() => { setError(""); detectedRef.current = false; setRetryCount((c) => c + 1); }}
             className="mt-2 text-sm text-white/60 underline"
           >
             Try again
