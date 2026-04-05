@@ -13,6 +13,7 @@ export default function SettingsPage() {
   const [protein, setProtein] = useState("180");
   const [carbs, setCarbs] = useState("250");
   const [fat, setFat] = useState("80");
+  const [fiber, setFiber] = useState("30");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -34,6 +35,7 @@ export default function SettingsPage() {
         setProtein(String(data.protein_g));
         setCarbs(String(data.carbs_g));
         setFat(String(data.fat_g));
+        setFiber(String(data.fiber_g ?? 30));
       }
       setLoading(false);
     }
@@ -61,6 +63,7 @@ export default function SettingsPage() {
       protein_g: parseInt(protein) || 180,
       carbs_g: parseInt(carbs) || 250,
       fat_g: parseInt(fat) || 80,
+      fiber_g: parseInt(fiber) || 30,
     };
 
     if (existing) {
@@ -132,6 +135,15 @@ export default function SettingsPage() {
               type="number"
               value={fat}
               onChange={(e) => setFat(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-muted mb-1">Fiber (g)</label>
+            <input
+              type="number"
+              value={fiber}
+              onChange={(e) => setFiber(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
             />
           </div>

@@ -3,24 +3,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
 
-type MealType = "breakfast" | "lunch" | "dinner" | "snack";
-
 interface FoodLogEntry {
   id: number;
-  meal_type: MealType;
   food_id: number | null;
-  meal_id: number | null;
   quantity_g: number | null;
-  servings: number;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number | null;
   food_name?: string;
 }
 
@@ -29,6 +25,7 @@ interface NutritionTargets {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
 }
 
 interface EstimatedNutrition {
@@ -36,14 +33,14 @@ interface EstimatedNutrition {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
+  sugar: number;
+  saturated_fat: number;
+  sodium: number;
+  source?: string;
+  product_name?: string;
+  brand?: string;
 }
-
-const MEAL_TYPES: { key: MealType; label: string }[] = [
-  { key: "breakfast", label: "Breakfast" },
-  { key: "lunch", label: "Lunch" },
-  { key: "dinner", label: "Dinner" },
-  { key: "snack", label: "Snacks" },
-];
 
 function formatDate(date: Date): string {
   return date.toISOString().split("T")[0];
@@ -65,15 +62,20 @@ export default function FoodPage() {
   const [entries, setEntries] = useState<FoodLogEntry[]>([]);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [loading, setLoading] = useState(true);
-  const [addingFor, setAddingFor] = useState<MealType | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
   // Add form state
   const [foodName, setFoodName] = useState("");
   const [quantity, setQuantity] = useState("100");
   const [estimated, setEstimated] = useState<EstimatedNutrition | null>(null);
+  const [editableEstimate, setEditableEstimate] = useState<EstimatedNutrition | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [estimateError, setEstimateError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Edit entry state
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null);
+  const [editEntryValues, setEditEntryValues] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
 
   const { isListening, transcript, isSupported, startListening, stopListening } = useSpeechRecognition();
 
@@ -83,9 +85,7 @@ export default function FoodPage() {
     const parsed = parseFoodSpeech(transcript);
     if (parsed.foodName) setFoodName(parsed.foodName);
     if (parsed.quantity !== null) setQuantity(String(parsed.quantity));
-    if (parsed.mealType && parsed.mealType !== addingFor) {
-      setAddingFor(parsed.mealType);
-    }
+    setShowAddForm(true);
   }, [transcript]);
 
   const dateStr = formatDate(currentDate);
@@ -125,7 +125,6 @@ export default function FoodPage() {
       setEntries(
         logRes.data.map((e) => ({
           ...e,
-          meal_type: e.meal_type as MealType,
           food_name: e.food_id ? foodMap.get(e.food_id) : undefined,
         }))
       );
@@ -137,6 +136,7 @@ export default function FoodPage() {
         protein: targetRes.data.protein_g,
         carbs: targetRes.data.carbs_g,
         fat: targetRes.data.fat_g,
+        fiber: targetRes.data.fiber_g ?? 30,
       });
     }
 
@@ -153,15 +153,16 @@ export default function FoodPage() {
       protein: acc.protein + e.protein,
       carbs: acc.carbs + e.carbs,
       fat: acc.fat + e.fat,
+      fiber: acc.fiber + (e.fiber ?? 0),
     }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
   );
 
   function changeDay(offset: number) {
     const d = new Date(currentDate);
     d.setDate(d.getDate() + offset);
     setCurrentDate(d);
-    setAddingFor(null);
+    setShowAddForm(false);
     resetForm();
   }
 
@@ -169,6 +170,7 @@ export default function FoodPage() {
     setFoodName("");
     setQuantity("100");
     setEstimated(null);
+    setEditableEstimate(null);
     setEstimateError("");
   }
 
@@ -177,6 +179,7 @@ export default function FoodPage() {
     setEstimating(true);
     setEstimateError("");
     setEstimated(null);
+    setEditableEstimate(null);
 
     try {
       const res = await fetch("/api/estimate-nutrition", {
@@ -187,6 +190,7 @@ export default function FoodPage() {
       const data = await res.json();
       if (res.ok) {
         setEstimated(data);
+        setEditableEstimate(data);
       } else {
         setEstimateError(data.error || "Could not estimate nutrition");
       }
@@ -198,7 +202,7 @@ export default function FoodPage() {
   }
 
   async function handleLog() {
-    if (!addingFor || !estimated) return;
+    if (!editableEstimate) return;
     setSaving(true);
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -207,16 +211,19 @@ export default function FoodPage() {
     const q = parseFloat(quantity) || 100;
     const multiplier = q / 100;
 
-    // Create food entry first
     const { data: food } = await supabase
       .from("foods")
       .insert({
         user_id: user.id,
         name: foodName.trim(),
-        calories_per_100g: estimated.calories,
-        protein_per_100g: estimated.protein,
-        carbs_per_100g: estimated.carbs,
-        fat_per_100g: estimated.fat,
+        calories_per_100g: editableEstimate.calories,
+        protein_per_100g: editableEstimate.protein,
+        carbs_per_100g: editableEstimate.carbs,
+        fat_per_100g: editableEstimate.fat,
+        fiber_per_100g: editableEstimate.fiber,
+        sugar_per_100g: editableEstimate.sugar,
+        saturated_fat_per_100g: editableEstimate.saturated_fat,
+        sodium_per_100g: editableEstimate.sodium,
         is_verified: false,
       })
       .select("id")
@@ -225,18 +232,22 @@ export default function FoodPage() {
     await supabase.from("food_log").insert({
       user_id: user.id,
       logged_at: dateStr,
-      meal_type: addingFor,
+      meal_type: "general",
       food_id: food?.id ?? null,
       quantity_g: q,
       servings: 1,
-      calories: Math.round(estimated.calories * multiplier),
-      protein: Math.round(estimated.protein * multiplier * 10) / 10,
-      carbs: Math.round(estimated.carbs * multiplier * 10) / 10,
-      fat: Math.round(estimated.fat * multiplier * 10) / 10,
+      calories: Math.round(editableEstimate.calories * multiplier),
+      protein: Math.round(editableEstimate.protein * multiplier * 10) / 10,
+      carbs: Math.round(editableEstimate.carbs * multiplier * 10) / 10,
+      fat: Math.round(editableEstimate.fat * multiplier * 10) / 10,
+      fiber: Math.round(editableEstimate.fiber * multiplier * 10) / 10,
+      sugar: Math.round(editableEstimate.sugar * multiplier * 10) / 10,
+      saturated_fat: Math.round(editableEstimate.saturated_fat * multiplier * 10) / 10,
+      sodium: Math.round(editableEstimate.sodium * multiplier * 10) / 10,
     });
 
     resetForm();
-    setAddingFor(null);
+    setShowAddForm(false);
     setSaving(false);
     fetchData();
   }
@@ -244,6 +255,58 @@ export default function FoodPage() {
   async function handleDelete(id: number) {
     await supabase.from("food_log").delete().eq("id", id);
     setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function startEditEntry(entry: FoodLogEntry) {
+    setEditingEntryId(entry.id);
+    setEditEntryValues({
+      calories: entry.calories,
+      protein: entry.protein,
+      carbs: entry.carbs,
+      fat: entry.fat,
+      fiber: entry.fiber ?? 0,
+    });
+  }
+
+  async function saveEditEntry(id: number) {
+    await supabase.from("food_log").update({
+      calories: editEntryValues.calories,
+      protein: editEntryValues.protein,
+      carbs: editEntryValues.carbs,
+      fat: editEntryValues.fat,
+      fiber: editEntryValues.fiber,
+    }).eq("id", id);
+    setEditingEntryId(null);
+    fetchData();
+  }
+
+  async function handleTargetsChange(newTargets: { calories: number; protein: number; carbs: number; fat: number; fiber: number }) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: existing } = await supabase
+      .from("nutrition_targets")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single();
+
+    const payload = {
+      user_id: user.id,
+      calories: newTargets.calories,
+      protein_g: newTargets.protein,
+      carbs_g: newTargets.carbs,
+      fat_g: newTargets.fat,
+      fiber_g: newTargets.fiber,
+    };
+
+    if (existing) {
+      await supabase.from("nutrition_targets").update(payload).eq("id", existing.id);
+    } else {
+      await supabase.from("nutrition_targets").insert(payload);
+    }
+
+    setTargets(newTargets);
   }
 
   return (
@@ -268,21 +331,17 @@ export default function FoodPage() {
           <BookOpen className="h-4 w-4" />
           My Meals
         </Link>
-        <Link
-          href="/settings"
-          className="px-3 py-2 bg-card border border-border rounded-lg text-sm text-muted hover:text-foreground transition-colors ml-auto"
-        >
-          Targets
-        </Link>
       </div>
 
-      {/* Macro summary */}
+      {/* Macro summary with inline editing */}
       <MacroSummary
         calories={totals.calories}
         protein={totals.protein}
         carbs={totals.carbs}
         fat={totals.fat}
+        fiber={totals.fiber}
         targets={targets}
+        onTargetsChange={handleTargetsChange}
       />
 
       {loading ? (
@@ -290,143 +349,165 @@ export default function FoodPage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted" />
         </div>
       ) : (
-        /* Meal sections */
-        MEAL_TYPES.map(({ key, label }) => {
-          const mealEntries = entries.filter((e) => e.meal_type === key);
-          const mealCals = mealEntries.reduce((s, e) => s + e.calories, 0);
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div>
+              <h2 className="font-semibold">Food Log</h2>
+              {totals.calories > 0 && (
+                <span className="text-xs text-muted">{Math.round(totals.calories)} kcal total</span>
+              )}
+            </div>
+            <button
+              onClick={() => { setShowAddForm(!showAddForm); if (showAddForm) resetForm(); }}
+              className="flex items-center gap-1 text-sm text-primary font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          </div>
 
-          return (
-            <div key={key} className="bg-card rounded-xl border border-border overflow-hidden">
-              <div className="flex items-center justify-between p-4 border-b border-border">
-                <div>
-                  <h2 className="font-semibold">{label}</h2>
-                  {mealCals > 0 && (
-                    <span className="text-xs text-muted">{mealCals} kcal</span>
-                  )}
+          {/* Food entries */}
+          {entries.map((entry) => (
+            <div key={entry.id} className="border-b border-border last:border-b-0">
+              {editingEntryId === entry.id ? (
+                <div className="p-4 space-y-2 bg-secondary/30">
+                  <p className="text-sm font-medium">{entry.food_name || "Unknown food"}</p>
+                  <div className="grid grid-cols-5 gap-2 text-xs">
+                    {(["calories", "protein", "carbs", "fat", "fiber"] as const).map((key) => (
+                      <div key={key}>
+                        <label className="text-muted capitalize block mb-1">{key === "calories" ? "Cal" : key}</label>
+                        <input
+                          type="number"
+                          value={editEntryValues[key]}
+                          onChange={(e) => setEditEntryValues({ ...editEntryValues, [key]: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-1.5 py-1 bg-background border border-border rounded text-sm text-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditingEntryId(null)} className="p-1.5 text-muted hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => saveEditEntry(entry.id)} className="p-1.5 text-primary hover:text-primary/80">
+                      <Check className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    if (addingFor === key) {
-                      setAddingFor(null);
-                      resetForm();
-                    } else {
-                      setAddingFor(key);
-                      resetForm();
-                    }
-                  }}
-                  className="flex items-center gap-1 text-sm text-primary font-medium"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </button>
-              </div>
-
-              {/* Logged items */}
-              {mealEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="flex items-center justify-between px-4 py-3 border-b border-border last:border-b-0"
-                >
+              ) : (
+                <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate">{entry.food_name || "Unknown food"}</p>
                     <p className="text-xs text-muted">
                       {entry.quantity_g}g &middot; P:{Math.round(entry.protein)}g &middot; C:{Math.round(entry.carbs)}g &middot; F:{Math.round(entry.fat)}g
+                      {entry.fiber != null && entry.fiber > 0 && <> &middot; Fb:{Math.round(entry.fiber)}g</>}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{entry.calories} kcal</span>
+                    <button onClick={() => startEditEntry(entry)} className="p-1 text-muted hover:text-foreground">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     <button onClick={() => handleDelete(entry.id)} className="text-muted hover:text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
-              ))}
+              )}
+            </div>
+          ))}
 
-              {mealEntries.length === 0 && addingFor !== key && (
-                <div className="px-4 py-3 text-sm text-muted">No items logged</div>
+          {entries.length === 0 && !showAddForm && (
+            <div className="px-4 py-3 text-sm text-muted">No items logged</div>
+          )}
+
+          {/* Add form */}
+          {showAddForm && (
+            <div className="p-4 border-t border-border space-y-3 bg-secondary/30">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Food name (e.g. chicken breast)"
+                  value={foodName}
+                  onChange={(e) => setFoodName(e.target.value)}
+                  className={`flex-1 px-3 py-2 rounded-lg bg-background border text-sm focus:outline-none focus:border-primary ${isListening ? "border-primary ring-2 ring-primary/30 animate-pulse" : "border-border"}`}
+                />
+                {isSupported && (
+                  <button
+                    type="button"
+                    onClick={isListening ? stopListening : startListening}
+                    className={`p-2 rounded-lg border transition-colors ${isListening ? "bg-destructive/10 border-destructive text-destructive" : "bg-secondary border-border text-muted hover:text-foreground"}`}
+                  >
+                    {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  placeholder="Grams"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                />
+                <button
+                  onClick={handleEstimate}
+                  disabled={estimating || !foodName.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-secondary text-sm font-medium disabled:opacity-50"
+                >
+                  {estimating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Estimate
+                </button>
+              </div>
+
+              {estimateError && (
+                <p className="text-xs text-destructive">{estimateError}</p>
               )}
 
-              {/* Add form */}
-              {addingFor === key && (
-                <div className="p-4 border-t border-border space-y-3 bg-secondary/30">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Food name (e.g. chicken breast)"
-                      value={foodName}
-                      onChange={(e) => setFoodName(e.target.value)}
-                      className={`flex-1 px-3 py-2 rounded-lg bg-background border text-sm focus:outline-none focus:border-primary ${isListening ? "border-primary ring-2 ring-primary/30 animate-pulse" : "border-border"}`}
-                    />
-                    {isSupported && (
-                      <button
-                        type="button"
-                        onClick={isListening ? stopListening : startListening}
-                        className={`p-2 rounded-lg border transition-colors ${isListening ? "bg-destructive/10 border-destructive text-destructive" : "bg-secondary border-border text-muted hover:text-foreground"}`}
-                      >
-                        {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      placeholder="Grams"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                    />
-                    <button
-                      onClick={handleEstimate}
-                      disabled={estimating || !foodName.trim()}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-secondary text-sm font-medium disabled:opacity-50"
-                    >
-                      {estimating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      Estimate
-                    </button>
-                  </div>
-
-                  {estimateError && (
-                    <p className="text-xs text-destructive">{estimateError}</p>
+              {editableEstimate && (
+                <div className="space-y-2">
+                  {editableEstimate.product_name && (
+                    <p className="text-xs text-muted">
+                      {editableEstimate.brand && `${editableEstimate.brand} — `}{editableEstimate.product_name}
+                    </p>
                   )}
-
-                  {estimated && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                        <div className="p-2 bg-background rounded-lg">
-                          <p className="text-muted">Cal/100g</p>
-                          <p className="font-medium">{estimated.calories}</p>
-                        </div>
-                        <div className="p-2 bg-background rounded-lg">
-                          <p className="text-muted">Protein</p>
-                          <p className="font-medium">{estimated.protein}g</p>
-                        </div>
-                        <div className="p-2 bg-background rounded-lg">
-                          <p className="text-muted">Carbs</p>
-                          <p className="font-medium">{estimated.carbs}g</p>
-                        </div>
-                        <div className="p-2 bg-background rounded-lg">
-                          <p className="text-muted">Fat</p>
-                          <p className="font-medium">{estimated.fat}g</p>
-                        </div>
+                  <div className="grid grid-cols-5 gap-1.5 text-center text-xs">
+                    {([
+                      { key: "calories", label: "Cal/100g" },
+                      { key: "protein", label: "Protein" },
+                      { key: "carbs", label: "Carbs" },
+                      { key: "fat", label: "Fat" },
+                      { key: "fiber", label: "Fiber" },
+                    ] as const).map(({ key, label }) => (
+                      <div key={key} className="p-2 bg-background rounded-lg">
+                        <p className="text-muted mb-1">{label}</p>
+                        <input
+                          type="number"
+                          value={editableEstimate[key]}
+                          onChange={(e) => setEditableEstimate({ ...editableEstimate, [key]: parseFloat(e.target.value) || 0 })}
+                          className="w-full text-center text-sm font-medium bg-transparent focus:outline-none focus:bg-secondary rounded"
+                        />
+                        <p className="text-muted">{key === "calories" ? "kcal" : "g"}</p>
                       </div>
-                      <button
-                        onClick={handleLog}
-                        disabled={saving}
-                        className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-                      >
-                        {saving ? "Logging..." : `Log ${quantity}g of ${foodName}`}
-                      </button>
-                    </div>
-                  )}
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleLog}
+                    disabled={saving}
+                    className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                  >
+                    {saving ? "Logging..." : `Log ${quantity}g of ${foodName}`}
+                  </button>
                 </div>
               )}
             </div>
-          );
-        })
+          )}
+        </div>
       )}
     </div>
   );

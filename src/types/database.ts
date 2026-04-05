@@ -144,6 +144,10 @@ export type Database = {
           protein_per_100g: number
           carbs_per_100g: number
           fat_per_100g: number
+          fiber_per_100g: number | null
+          sugar_per_100g: number | null
+          saturated_fat_per_100g: number | null
+          sodium_per_100g: number | null
           is_verified: boolean
           created_at: string
         }
@@ -155,6 +159,10 @@ export type Database = {
           protein_per_100g: number
           carbs_per_100g: number
           fat_per_100g: number
+          fiber_per_100g?: number | null
+          sugar_per_100g?: number | null
+          saturated_fat_per_100g?: number | null
+          sodium_per_100g?: number | null
           is_verified?: boolean
           created_at?: string
         }
@@ -166,6 +174,10 @@ export type Database = {
           protein_per_100g?: number
           carbs_per_100g?: number
           fat_per_100g?: number
+          fiber_per_100g?: number | null
+          sugar_per_100g?: number | null
+          saturated_fat_per_100g?: number | null
+          sodium_per_100g?: number | null
           is_verified?: boolean
           created_at?: string
         }
@@ -227,6 +239,10 @@ export type Database = {
           protein: number
           carbs: number
           fat: number
+          fiber: number | null
+          sugar: number | null
+          saturated_fat: number | null
+          sodium: number | null
         }
         Insert: {
           id?: number
@@ -241,6 +257,10 @@ export type Database = {
           protein: number
           carbs: number
           fat: number
+          fiber?: number | null
+          sugar?: number | null
+          saturated_fat?: number | null
+          sodium?: number | null
         }
         Update: {
           id?: number
@@ -255,6 +275,10 @@ export type Database = {
           protein?: number
           carbs?: number
           fat?: number
+          fiber?: number | null
+          sugar?: number | null
+          saturated_fat?: number | null
+          sodium?: number | null
         }
         Relationships: []
       }
@@ -266,6 +290,8 @@ export type Database = {
           protein_g: number
           carbs_g: number
           fat_g: number
+          fiber_g: number | null
+          sugar_g: number | null
         }
         Insert: {
           id?: number
@@ -274,6 +300,8 @@ export type Database = {
           protein_g: number
           carbs_g: number
           fat_g: number
+          fiber_g?: number | null
+          sugar_g?: number | null
         }
         Update: {
           id?: number
@@ -282,6 +310,8 @@ export type Database = {
           protein_g?: number
           carbs_g?: number
           fat_g?: number
+          fiber_g?: number | null
+          sugar_g?: number | null
         }
         Relationships: []
       }
