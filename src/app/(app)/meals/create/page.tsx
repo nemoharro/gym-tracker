@@ -86,22 +86,38 @@ export default function CreateMealPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: saved } = await supabase
+      // Try to find existing food by name first
+      const { data: existing } = await supabase
         .from("foods")
-        .upsert({
-          user_id: user.id,
-          name: food.name,
-          calories_per_100g: food.calories_per_100g,
-          protein_per_100g: food.protein_per_100g,
-          carbs_per_100g: food.carbs_per_100g,
-          fat_per_100g: food.fat_per_100g,
-          is_verified: false,
-        }, { onConflict: "name,user_id" })
         .select("id")
+        .eq("user_id", user.id)
+        .eq("name", food.name)
         .maybeSingle();
 
-      if (saved) {
-        food = { ...food, id: saved.id };
+      if (existing) {
+        food = { ...food, id: existing.id };
+      } else {
+        // Insert new food
+        const { data: saved } = await supabase
+          .from("foods")
+          .insert({
+            user_id: user.id,
+            name: food.name,
+            calories_per_100g: food.calories_per_100g,
+            protein_per_100g: food.protein_per_100g,
+            carbs_per_100g: food.carbs_per_100g,
+            fat_per_100g: food.fat_per_100g,
+            is_verified: false,
+          })
+          .select("id")
+          .single();
+
+        if (saved) {
+          food = { ...food, id: saved.id };
+        } else {
+          alert("Failed to save food to your database.");
+          return;
+        }
       }
     }
 
