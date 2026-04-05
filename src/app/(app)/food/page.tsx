@@ -503,11 +503,40 @@ export default function FoodPage() {
     if (!user) return;
 
     for (const food of aiResults) {
+      // Save food to personal database so it's available for future use
+      let foodId: number | null = null;
+      const { data: existing } = await supabase
+        .from("foods")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("name", food.name)
+        .maybeSingle();
+
+      if (existing) {
+        foodId = existing.id;
+      } else {
+        const { data: saved } = await supabase
+          .from("foods")
+          .insert({
+            user_id: user.id,
+            name: food.name,
+            calories_per_100g: food.quantity_g > 0 ? Math.round(food.calories / food.quantity_g * 100) : food.calories,
+            protein_per_100g: food.quantity_g > 0 ? Math.round(food.protein / food.quantity_g * 100 * 10) / 10 : food.protein,
+            carbs_per_100g: food.quantity_g > 0 ? Math.round(food.carbs / food.quantity_g * 100 * 10) / 10 : food.carbs,
+            fat_per_100g: food.quantity_g > 0 ? Math.round(food.fat / food.quantity_g * 100 * 10) / 10 : food.fat,
+            fiber_per_100g: food.quantity_g > 0 ? Math.round(food.fiber / food.quantity_g * 100 * 10) / 10 : food.fiber,
+            is_verified: false,
+          })
+          .select("id")
+          .maybeSingle();
+        if (saved) foodId = saved.id;
+      }
+
       await supabase.from("food_log").insert({
         user_id: user.id,
         logged_at: dateStr,
         meal_type: "general",
-        food_id: null,
+        food_id: foodId,
         quantity_g: food.quantity_g,
         servings: 1,
         calories: food.calories,
@@ -792,24 +821,6 @@ export default function FoodPage() {
         onTargetsChange={handleTargetsChange}
       />
 
-      {/* Recent foods */}
-      {recentFoods.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted font-medium px-1">Quick add from recent</p>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-            {recentFoods.map((rf) => (
-              <button
-                key={rf.food_id}
-                onClick={() => handleQuickLog(rf)}
-                className="flex-shrink-0 px-3 py-2 bg-card border border-border rounded-lg text-left hover:border-primary transition-colors"
-              >
-                <p className="text-xs font-medium truncate max-w-[120px]">{rf.name}</p>
-                <p className="text-xs text-muted">{rf.quantity_g}g &middot; {Math.round(rf.calories_per_100g * rf.quantity_g / 100)} kcal</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div className="flex justify-center py-8">
@@ -827,26 +838,28 @@ export default function FoodPage() {
             Food
           </button>
           <button
-            onClick={() => { setShowMealPicker(!showMealPicker); setShowAddForm(false); setShowAskAI(false); setShowCreateFood(false); if (!showMealPicker) fetchMeals(); }}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showMealPicker ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
-          >
-            <UtensilsCrossed className="h-4 w-4" />
-            Meal
-          </button>
-          <button
             onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); setShowMealPicker(false); }}
-            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <MessageCircle className="h-4 w-4" />
             AI
           </button>
           <button
             onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowAskAI(false); setShowMealPicker(false); }}
-            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <PlusCircle className="h-3.5 w-3.5" />
             New
           </button>
+          {barcodeSupported && (
+            <button
+              onClick={() => setScannerOpen(true)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors bg-card border border-border"
+            >
+              <ScanBarcode className="h-4 w-4" />
+              Scan
+            </button>
+          )}
         </div>
 
         {/* Ask AI form */}
@@ -949,127 +962,6 @@ export default function FoodPage() {
           </div>
         )}
 
-        {/* Meal picker */}
-        {showMealPicker && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-medium">Log Meal Portion</p>
-              <button onClick={() => { setShowMealPicker(false); setSelectedMeal(null); setMealPortion(""); }} className="p-1 text-muted hover:text-foreground">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {!selectedMeal ? (
-              <>
-                {savedMeals.length === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-muted mb-2">No saved meals yet</p>
-                    <Link href="/meals/create" className="text-sm text-primary font-medium">Create a meal</Link>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {savedMeals.map((meal) => {
-                      const per100 = meal.total_weight_g && meal.total_weight_g > 0
-                        ? Math.round(meal.totalCal / meal.total_weight_g * 100)
-                        : null;
-                      return (
-                        <button
-                          key={meal.id}
-                          onClick={() => setSelectedMeal(meal)}
-                          className="w-full text-left p-3 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
-                        >
-                          <p className="text-sm font-medium">{meal.name}</p>
-                          <p className="text-xs text-muted">
-                            {meal.total_weight_g ? `${Math.round(meal.total_weight_g)}g batch` : "No batch weight set"}
-                            {per100 != null && ` \u00B7 ${per100} kcal/100g`}
-                            {` \u00B7 ${Math.round(meal.totalCal)} kcal total`}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="space-y-3">
-                <div className="p-3 bg-secondary rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">{selectedMeal.name}</p>
-                    <button onClick={() => setSelectedMeal(null)} className="text-xs text-primary">Change</button>
-                  </div>
-                  <p className="text-xs text-muted mt-0.5">
-                    {selectedMeal.total_weight_g ? `${Math.round(selectedMeal.total_weight_g)}g batch` : "No batch weight"}
-                    {` \u00B7 ${Math.round(selectedMeal.totalCal)} kcal total`}
-                  </p>
-                </div>
-
-                {!selectedMeal.total_weight_g ? (
-                  <>
-                    <div className="p-3 bg-primary/5 rounded-lg">
-                      <p className="text-xs text-muted font-medium mb-1">Full meal</p>
-                      <div className="flex gap-3 text-sm">
-                        <span className="font-medium">{Math.round(selectedMeal.totalCal)} kcal</span>
-                        <span className="text-muted">P: {Math.round(selectedMeal.totalProtein)}g</span>
-                        <span className="text-muted">C: {Math.round(selectedMeal.totalCarbs)}g</span>
-                        <span className="text-muted">F: {Math.round(selectedMeal.totalFat)}g</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={handleLogWholeMeal}
-                      disabled={mealLogging}
-                      className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-                    >
-                      {mealLogging ? "Logging..." : `Log ${selectedMeal.name}`}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="text-xs text-muted block mb-1">How much did you have?</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          placeholder="e.g. 350"
-                          value={mealPortion}
-                          onChange={(e) => setMealPortion(e.target.value)}
-                          className="w-full px-3 py-2 pr-8 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                        />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
-                      </div>
-                    </div>
-
-                    {mealPortion && parseFloat(mealPortion) > 0 && (() => {
-                      const portion = parseFloat(mealPortion);
-                      const ratio = portion / selectedMeal.total_weight_g!;
-                      return (
-                        <div className="p-3 bg-primary/5 rounded-lg">
-                          <p className="text-xs text-muted font-medium mb-1">
-                            {Math.round(ratio * 100)}% of batch ({Math.round(portion)}g / {Math.round(selectedMeal.total_weight_g!)}g)
-                          </p>
-                          <div className="flex gap-3 text-sm">
-                            <span className="font-medium">{Math.round(selectedMeal.totalCal * ratio)} kcal</span>
-                            <span className="text-muted">P: {Math.round(selectedMeal.totalProtein * ratio)}g</span>
-                            <span className="text-muted">C: {Math.round(selectedMeal.totalCarbs * ratio)}g</span>
-                            <span className="text-muted">F: {Math.round(selectedMeal.totalFat * ratio)}g</span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    <button
-                      onClick={handleLogMealPortion}
-                      disabled={mealLogging || !mealPortion || parseFloat(mealPortion) <= 0}
-                      className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-                    >
-                      {mealLogging ? "Logging..." : `Log ${mealPortion || "0"}g of ${selectedMeal.name}`}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Add form - separate card */}
         {showAddForm && (
           <div className="bg-card rounded-xl border border-border p-4 space-y-3">
@@ -1089,15 +981,6 @@ export default function FoodPage() {
                     onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                     className={`flex-1 px-3 py-2 rounded-lg bg-background border text-sm focus:outline-none focus:border-primary ${isListening ? "border-primary ring-2 ring-primary/30 animate-pulse" : "border-border"}`}
                   />
-                  {barcodeSupported && (
-                    <button
-                      type="button"
-                      onClick={() => setScannerOpen(true)}
-                      className="p-2 rounded-lg border border-border bg-secondary text-muted hover:text-foreground transition-colors"
-                    >
-                      <ScanBarcode className="h-5 w-5" />
-                    </button>
-                  )}
                   {isSupported && (
                     <button
                       type="button"
