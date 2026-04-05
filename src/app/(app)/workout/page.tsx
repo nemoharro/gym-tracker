@@ -6,9 +6,10 @@ import { ExercisePicker } from "@/components/ExercisePicker";
 import { LastSessionBanner } from "@/components/LastSessionBanner";
 import { SetRow } from "@/components/SetRow";
 import { AddSetForm } from "@/components/AddSetForm";
-import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check, Dumbbell, TrendingUp } from "lucide-react";
+import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check, Dumbbell, TrendingUp, Trophy } from "lucide-react";
 import type { Exercise } from "@/hooks/useExercises";
 import { useTodaysWorkout } from "@/hooks/useTodaysWorkout";
+import { usePersonalBest } from "@/hooks/usePersonalBest";
 
 function formatDuration(startedAt: string) {
   const start = new Date(startedAt).getTime();
@@ -54,6 +55,7 @@ function ExerciseCard({
 }) {
   const [expanded, setExpanded] = useState(true);
   const [finalized, setFinalized] = useState(false);
+  const pb = usePersonalBest(exerciseId);
 
   return (
     <div className={`bg-card rounded-xl border overflow-hidden ${finalized ? "border-primary/30" : "border-border"}`}>
@@ -61,12 +63,20 @@ function ExerciseCard({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between p-4"
       >
-        <div className="flex items-center gap-3">
-          <h3 className="font-semibold">{exerciseName}</h3>
-          <span className="text-xs text-muted bg-secondary px-2 py-0.5 rounded-full">
-            {sets.length} {sets.length === 1 ? "set" : "sets"}
-          </span>
-          {finalized && <Check className="h-4 w-4 text-primary" />}
+        <div>
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold">{exerciseName}</h3>
+            <span className="text-xs text-muted bg-secondary px-2 py-0.5 rounded-full">
+              {sets.length} {sets.length === 1 ? "set" : "sets"}
+            </span>
+            {finalized && <Check className="h-4 w-4 text-primary" />}
+          </div>
+          {pb && (
+            <div className="flex items-center gap-1 mt-0.5">
+              <Trophy className="h-3 w-3 text-yellow-500" />
+              <span className="text-xs text-muted">{pb.weight_kg}kg × {pb.reps}</span>
+            </div>
+          )}
         </div>
         {expanded ? (
           <ChevronUp className="h-4 w-4 text-muted" />
