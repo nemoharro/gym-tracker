@@ -29,7 +29,15 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  await supabase.auth.getUser()
+  try {
+    await supabase.auth.getUser()
+  } catch {
+    // If the auth token is corrupted, clear the cookies so the user can log in fresh
+    const cookieNames = request.cookies.getAll().map(c => c.name).filter(n => n.startsWith('sb-'));
+    for (const name of cookieNames) {
+      supabaseResponse.cookies.delete(name)
+    }
+  }
 
   return supabaseResponse
 }
