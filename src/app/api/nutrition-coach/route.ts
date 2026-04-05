@@ -50,11 +50,16 @@ RULES:
 
 <foods>
 [
-  { "name": "Chicken breast cooked", "quantity_g": 200, "calories": 330, "protein": 62, "carbs": 0, "fat": 7.2, "fiber": 0 },
-  { "name": "Basmati rice cooked", "quantity_g": 185, "calories": 240, "protein": 5, "carbs": 52, "fat": 0.6, "fiber": 0.7 }
+  { "name": "Chicken breast — 1 medium, cooked (~165g)", "quantity_g": 165, "calories": 272, "protein": 51, "carbs": 0, "fat": 5.9, "fiber": 0 },
+  { "name": "Basmati rice — 1 cup cooked (~185g)", "quantity_g": 185, "calories": 240, "protein": 5, "carbs": 52, "fat": 0.6, "fiber": 0.7 }
 ]
 </foods>
 
+- The "name" MUST describe the portion clearly so the user can verify it. Include quantity description + approximate grams in parentheses. Examples:
+  - "Avocado — half, medium (~85g)" NOT just "Avocado"
+  - "Wholemeal bread — 2 slices (~90g)" NOT just "Bread"
+  - "Full cream milk — 250ml (~258g)" NOT just "Milk"
+- Use ACCURATE Australian weights. A bread slice is ~38-45g. A medium avocado is ~170g. A cup of cooked rice is ~185g.
 - The <foods> block lets the user add it directly to their food log with one tap.
 - Include the <foods> block ANY time you mention specific foods with specific quantities — whether estimating what they ate, suggesting a meal, or calculating portions.
 - Outside the <foods> block, add a brief human-readable summary.

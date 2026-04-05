@@ -26,8 +26,8 @@ Respond ONLY with valid JSON in this exact format, no other text, no markdown co
 {
   "foods": [
     {
-      "name": "food item name",
-      "quantity_g": estimated weight in grams,
+      "name": "descriptive name including portion (e.g. 'Avocado — half, medium' or 'Wholemeal bread — 2 slices')",
+      "quantity_g": weight in grams,
       "calories": total calories for that quantity,
       "protein": grams of protein,
       "carbs": grams of carbs,
@@ -37,13 +37,20 @@ Respond ONLY with valid JSON in this exact format, no other text, no markdown co
   ]
 }
 
-Rules:
-- Use realistic Australian serving sizes
-- For meals like "pad thai" or "butter chicken", estimate the full dish as served
-- Be specific with the food name (e.g. "pad thai with chicken" not just "pad thai")
-- Round to 1 decimal place for macros, whole numbers for calories
-- If they mention a quantity, use that. Otherwise estimate a standard serve
-- Include all components (e.g. rice served with curry should be a separate item)`,
+CRITICAL RULES:
+- The "name" field MUST describe the portion clearly so the user can verify it. Include the quantity description AND the size. Examples:
+  - "Avocado — half, medium (~85g)" NOT just "Avocado"
+  - "Wholemeal bread — 2 slices (~90g)" NOT just "Bread"
+  - "Chicken breast — 1 medium, cooked (~165g)" NOT just "Chicken breast"
+  - "Basmati rice — 1 cup cooked (~185g)" NOT just "Rice"
+  - "Full cream milk — 250ml (~258g)" NOT just "Milk"
+- Include the approximate gram weight in parentheses in the name so the user can sanity-check it
+- Use ACCURATE Australian weights. A slice of sandwich bread is ~38-45g. A medium avocado is ~170g (half = ~85g). A cup of cooked rice is ~185g.
+- For restaurant/takeaway meals, estimate generously — portions are usually larger than home-cooked
+- Round macros to 1 decimal place, calories to whole numbers
+- If they mention a specific quantity (e.g. "half", "2 slices", "200g"), honour that exactly
+- If no quantity mentioned, use a standard Australian serve and describe it
+- Include all components separately (e.g. rice served with curry = two items)`,
     });
 
     const text = response.text ?? "";
