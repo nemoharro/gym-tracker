@@ -119,7 +119,7 @@ export default function FoodPage() {
         .select("*")
         .eq("user_id", user.id)
         .limit(1)
-        .single(),
+        .maybeSingle(),
       supabase
         .from("foods")
         .select("id, name")
@@ -466,7 +466,7 @@ export default function FoodPage() {
       .select("id")
       .eq("user_id", user.id)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     const payload = {
       user_id: user.id,

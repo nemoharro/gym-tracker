@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Clock, Dumbbell, ChevronRight } from "lucide-react";
+import { Clock, Dumbbell, ChevronRight, Trash2 } from "lucide-react";
 
 interface WorkoutSummary {
   id: number;
@@ -15,12 +15,13 @@ interface WorkoutSummary {
 }
 
 export default function HistoryPage() {
+  const supabase = createClient();
   const [workouts, setWorkouts] = useState<WorkoutSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchHistory() {
-      const supabase = createClient();
 
       // Get all completed sessions (most recent first)
       const { data: sessions } = await supabase
@@ -113,6 +114,19 @@ export default function HistoryPage() {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
 
+  async function handleDeleteSession(sessionId: number) {
+    if (!confirm("Delete this workout? This cannot be undone.")) return;
+    setDeletingId(sessionId);
+    const { error } = await supabase.from("workout_sessions").delete().eq("id", sessionId);
+    if (error) {
+      alert("Failed to delete workout. Please try again.");
+      setDeletingId(null);
+      return;
+    }
+    setWorkouts((prev) => prev.filter((w) => w.id !== sessionId));
+    setDeletingId(null);
+  }
+
   if (loading) {
     return (
       <div className="p-4">
@@ -149,32 +163,41 @@ export default function HistoryPage() {
         {workouts.map((w) => {
           const duration = formatDuration(w.started_at, w.finished_at);
           return (
-            <Link key={w.id} href={`/history/${w.id}`}>
-              <div className="bg-card border border-border rounded-xl p-4 active:bg-secondary transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-foreground">
-                        {formatDate(w.started_at)}
+            <div key={w.id} className="bg-card border border-border rounded-xl p-4 active:bg-secondary transition-colors">
+              <div className="flex items-start justify-between">
+                <Link href={`/history/${w.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-foreground">
+                      {formatDate(w.started_at)}
+                    </span>
+                    {duration && (
+                      <span className="flex items-center gap-1 text-xs text-muted">
+                        <Clock className="h-3 w-3" />
+                        {duration}
                       </span>
-                      {duration && (
-                        <span className="flex items-center gap-1 text-xs text-muted">
-                          <Clock className="h-3 w-3" />
-                          {duration}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted mb-2">
-                      {w.exerciseNames.length} exercise{w.exerciseNames.length !== 1 ? "s" : ""} &middot; {w.totalSets} set{w.totalSets !== 1 ? "s" : ""}
-                    </p>
-                    <p className="text-sm text-muted truncate">
-                      {w.exerciseNames.join(", ")}
-                    </p>
+                    )}
                   </div>
-                  <ChevronRight className="h-5 w-5 text-muted flex-shrink-0 mt-1" />
+                  <p className="text-sm text-muted mb-2">
+                    {w.exerciseNames.length} exercise{w.exerciseNames.length !== 1 ? "s" : ""} &middot; {w.totalSets} set{w.totalSets !== 1 ? "s" : ""}
+                  </p>
+                  <p className="text-sm text-muted truncate">
+                    {w.exerciseNames.join(", ")}
+                  </p>
+                </Link>
+                <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+                  <button
+                    onClick={() => handleDeleteSession(w.id)}
+                    disabled={deletingId === w.id}
+                    className="p-1.5 text-muted hover:text-destructive transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                  <Link href={`/history/${w.id}`}>
+                    <ChevronRight className="h-5 w-5 text-muted" />
+                  </Link>
                 </div>
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>

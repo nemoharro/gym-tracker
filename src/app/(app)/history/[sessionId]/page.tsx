@@ -37,6 +37,7 @@ export default function SessionDetailPage() {
   const [editNotes, setEditNotes] = useState("");
   const [editSets, setEditSets] = useState<Map<number, { weight_kg: number; reps: number; rpe: number | null }>>(new Map());
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const sessionId = Number(params.sessionId);
 
@@ -206,6 +207,18 @@ export default function SessionDetailPage() {
     fetchSession();
     // Re-enter edit mode to edit the new set
     setTimeout(() => startEditing(), 300);
+  }
+
+  async function handleDeleteSession() {
+    if (!confirm("Delete this entire workout? This cannot be undone.")) return;
+    setDeleting(true);
+    const { error } = await supabase.from("workout_sessions").delete().eq("id", sessionId);
+    if (error) {
+      alert("Failed to delete workout. Please try again.");
+      setDeleting(false);
+      return;
+    }
+    router.push("/history");
   }
 
   function formatDate(dateStr: string): string {
@@ -412,6 +425,16 @@ export default function SessionDetailPage() {
           No exercises recorded in this workout.
         </p>
       )}
+
+      {/* Delete session */}
+      <button
+        onClick={handleDeleteSession}
+        disabled={deleting}
+        className="w-full mt-6 py-2.5 rounded-lg bg-card border border-border text-destructive text-sm font-medium flex items-center justify-center gap-2 hover:bg-secondary disabled:opacity-50"
+      >
+        <Trash2 className="h-4 w-4" />
+        {deleting ? "Deleting..." : "Delete Workout"}
+      </button>
     </div>
   );
 }

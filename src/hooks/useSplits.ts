@@ -208,7 +208,7 @@ export function useSplits() {
       .select("id")
       .eq("user_id", user.id)
       .eq("day_of_week", dayOfWeek)
-      .single();
+      .maybeSingle();
 
     const payload = {
       user_id: user.id,

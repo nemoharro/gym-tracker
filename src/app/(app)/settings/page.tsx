@@ -28,7 +28,7 @@ export default function SettingsPage() {
         .select("*")
         .eq("user_id", user.id)
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (data) {
         setCalories(String(data.calories));
@@ -55,7 +55,7 @@ export default function SettingsPage() {
       .select("id")
       .eq("user_id", user.id)
       .limit(1)
-      .single();
+      .maybeSingle();
 
     const p = parseInt(protein) || 180;
     const c = parseInt(carbs) || 250;
