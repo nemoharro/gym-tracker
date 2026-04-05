@@ -6,7 +6,8 @@ import { ExercisePicker } from "@/components/ExercisePicker";
 import { LastSessionBanner } from "@/components/LastSessionBanner";
 import { SetRow } from "@/components/SetRow";
 import { AddSetForm } from "@/components/AddSetForm";
-import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check, Dumbbell, TrendingUp, Trophy } from "lucide-react";
+import { Plus, Square, Timer, ChevronDown, ChevronUp, Trash2, Check, Dumbbell, TrendingUp, Trophy, LayoutGrid, X } from "lucide-react";
+import Link from "next/link";
 import type { Exercise } from "@/hooks/useExercises";
 import { useTodaysWorkout } from "@/hooks/useTodaysWorkout";
 import { usePersonalBest } from "@/hooks/usePersonalBest";
@@ -155,6 +156,7 @@ export default function WorkoutPage() {
     exercises,
     startWorkout,
     finishWorkout,
+    discardWorkout,
     addExercise,
     removeExercise,
     addSet,
@@ -163,6 +165,7 @@ export default function WorkoutPage() {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   function handleSelectExercise(exercise: Exercise) {
     addExercise(exercise.id, exercise.name);
@@ -182,12 +185,23 @@ export default function WorkoutPage() {
     }
   }
 
+  async function handleDiscard() {
+    await discardWorkout();
+    setShowDiscardConfirm(false);
+  }
+
   // Not started yet
   if (!isActive) {
     return (
       <div className="p-4 space-y-4">
-        <div className="text-center py-4">
-          <h1 className="text-2xl font-bold mb-2">Ready to train?</h1>
+        <div className="flex items-center justify-between">
+          <div />
+          <h1 className="text-xl font-bold">Workout</h1>
+          <Link href="/splits" className="p-2 rounded-lg bg-card border border-border">
+            <LayoutGrid className="h-5 w-5 text-muted" />
+          </Link>
+        </div>
+        <div className="text-center py-2">
           <p className="text-muted text-sm">Start a workout to begin tracking your sets.</p>
         </div>
 
@@ -268,15 +282,46 @@ export default function WorkoutPage() {
           <h1 className="text-xl font-bold">Workout</h1>
           {startedAt && <WorkoutTimer startedAt={startedAt} />}
         </div>
-        <button
-          onClick={handleFinish}
-          disabled={finishing}
-          className="flex items-center gap-1.5 px-4 py-2 bg-destructive/10 text-destructive rounded-lg font-medium text-sm active:opacity-80 transition-opacity disabled:opacity-50"
-        >
-          <Square className="h-3.5 w-3.5" />
-          {finishing ? "Finishing..." : "Finish"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDiscardConfirm(true)}
+            className="flex items-center gap-1 px-3 py-2 text-muted rounded-lg text-sm active:opacity-80"
+          >
+            <X className="h-3.5 w-3.5" />
+            Discard
+          </button>
+          <button
+            onClick={handleFinish}
+            disabled={finishing}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium text-sm active:opacity-80 transition-opacity disabled:opacity-50"
+          >
+            <Check className="h-3.5 w-3.5" />
+            {finishing ? "Saving..." : "Finish"}
+          </button>
+        </div>
       </div>
+
+      {/* Discard confirmation */}
+      {showDiscardConfirm && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-medium text-destructive">Discard this workout?</p>
+          <p className="text-xs text-muted">All logged sets will be permanently deleted.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowDiscardConfirm(false)}
+              className="flex-1 py-2 rounded-lg bg-secondary text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDiscard}
+              className="flex-1 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Exercise list */}
       {exercises.length === 0 ? (

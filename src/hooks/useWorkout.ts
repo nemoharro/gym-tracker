@@ -27,6 +27,7 @@ interface WorkoutState {
   // Actions
   startWorkout: (splitDayId?: number) => Promise<void>;
   finishWorkout: (notes?: string) => Promise<void>;
+  discardWorkout: () => Promise<void>;
   addExercise: (exerciseId: number, exerciseName: string) => void;
   removeExercise: (exerciseId: number) => void;
   addSet: (
@@ -116,6 +117,22 @@ export const useWorkout = create<WorkoutState>((set, get) => ({
       alert("Failed to finish workout. Please try again.");
       return;
     }
+
+    set({
+      isActive: false,
+      sessionId: null,
+      startedAt: null,
+      exercises: [],
+    });
+  },
+
+  discardWorkout: async () => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+
+    const supabase = createClient();
+    await supabase.from("workout_sets").delete().eq("session_id", sessionId);
+    await supabase.from("workout_sessions").delete().eq("id", sessionId);
 
     set({
       isActive: false,

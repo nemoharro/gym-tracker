@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell, History, LayoutDashboard, UtensilsCrossed, LayoutGrid } from "lucide-react";
+import { Dumbbell, History, LayoutDashboard, UtensilsCrossed, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -10,7 +10,7 @@ const navItems = [
   { href: "/workout", label: "Workout", icon: Dumbbell },
   { href: "/food", label: "Food", icon: UtensilsCrossed },
   { href: "/history", label: "History", icon: History },
-  { href: "/splits", label: "Splits", icon: LayoutGrid },
+  { href: "/progress", label: "Progress", icon: TrendingUp },
 ];
 
 export function BottomNav() {

@@ -20,6 +20,8 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   const containerRef = useRef<string>("barcode-scanner-container");
   const [error, setError] = useState("");
   const detectedRef = useRef(false);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
 
   useEffect(() => {
     if (!open) return;
@@ -45,7 +47,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
             if (!detectedRef.current) {
               detectedRef.current = true;
               scanner.stop().catch(() => {});
-              onScan(decodedText);
+              onScanRef.current(decodedText);
             }
           },
           () => {
@@ -65,7 +67,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         scanner.clear().catch(() => {});
       }
     };
-  }, [open, onScan]);
+  }, [open]);
 
   function handleClose() {
     if (scannerRef.current) {
