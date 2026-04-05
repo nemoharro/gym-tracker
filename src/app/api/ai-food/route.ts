@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash",
       contents: `You are a nutrition expert. The user describes what they ate. Break it down into individual food items with estimated nutrition per item.
 
 User said: "${description}"
