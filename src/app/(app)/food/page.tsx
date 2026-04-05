@@ -1152,30 +1152,28 @@ export default function FoodPage() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1 flex gap-1.5">
-                  <input
-                    type="number"
-                    placeholder="Quantity"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                  />
-                  <select
-                    value={quantityUnit}
-                    onChange={(e) => setQuantityUnit(e.target.value as "g" | "kg" | "ml" | "L")}
-                    className="px-2 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                  >
-                    <option value="g">g</option>
-                    <option value="kg">kg</option>
-                    <option value="ml">ml</option>
-                    <option value="L">L</option>
-                  </select>
-                </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="number"
+                  placeholder="Qty"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-20 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                />
+                <select
+                  value={quantityUnit}
+                  onChange={(e) => setQuantityUnit(e.target.value as "g" | "kg" | "ml" | "L")}
+                  className="px-2 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="ml">ml</option>
+                  <option value="L">L</option>
+                </select>
                 <button
                   onClick={handleEstimate}
                   disabled={estimating || !foodName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-secondary text-sm font-medium disabled:opacity-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
                 >
                   {estimating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

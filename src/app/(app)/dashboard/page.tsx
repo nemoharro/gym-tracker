@@ -79,6 +79,7 @@ export default function DashboardPage() {
       targetsRes,
       streakWeightRes,
       streakFoodRes,
+      streakWorkoutRes,
     ] = await Promise.all([
       supabase.from("workout_sessions").select("started_at").eq("user_id", user.id)
         .gte("started_at", monday.toISOString())
@@ -93,6 +94,9 @@ export default function DashboardPage() {
         .gte("logged_at", formatDateISO(sevenDaysAgo)),
       supabase.from("food_log").select("logged_at").eq("user_id", user.id)
         .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
+      // Streak: workouts last 7 days
+      supabase.from("workout_sessions").select("started_at").eq("user_id", user.id)
+        .gte("started_at", sevenDaysAgo.toISOString()),
     ]);
 
     // Week sessions
@@ -140,9 +144,20 @@ export default function DashboardPage() {
       });
     }
 
-    // Streak: weight + food only
+    // Streak: weight + food + gym (gym only if split scheduled for that day)
     const weightDates = new Set(streakWeightRes.data?.map(w => w.logged_at) ?? []);
     const foodDates = new Set(streakFoodRes.data?.map(f => f.logged_at) ?? []);
+    const workoutDates = new Set(
+      streakWorkoutRes.data?.map(w => new Date(w.started_at).toISOString().split("T")[0]) ?? []
+    );
+
+    // Build schedule map: day_of_week (0=Sun) -> is_rest_day
+    const scheduleMap = new Map<number, boolean>();
+    if (scheduleRes.data) {
+      for (const s of scheduleRes.data) {
+        scheduleMap.set(s.day_of_week, s.is_rest_day);
+      }
+    }
 
     const days: boolean[] = [];
     const labels: string[] = [];
@@ -151,8 +166,18 @@ export default function DashboardPage() {
     for (let i = 6; i >= 0; i--) {
       const d = getDaysAgo(i);
       const ds = formatDateISO(d);
-      days.push(weightDates.has(ds) && foodDates.has(ds));
-      labels.push(abbrevs[d.getDay()]);
+      const dow = d.getDay(); // 0=Sun
+
+      const hasWeight = weightDates.has(ds);
+      const hasFood = foodDates.has(ds);
+      const hasGym = workoutDates.has(ds);
+
+      // Gym required only if schedule has a non-rest entry for this day
+      const schedEntry = scheduleMap.get(dow);
+      const gymRequired = schedEntry !== undefined && !schedEntry;
+
+      days.push(hasWeight && hasFood && (!gymRequired || hasGym));
+      labels.push(abbrevs[dow]);
     }
     setStreakDays(days);
     setStreakDayLabels(labels);
@@ -208,7 +233,7 @@ export default function DashboardPage() {
               {currentStreak > 0 ? `${currentStreak} day streak` : "Start your streak"}
             </span>
           </div>
-          <span className="text-xs text-muted">weight + food</span>
+          <span className="text-xs text-muted">weight + food + gym</span>
         </div>
         <div className="flex justify-around">
           {streakDays.map((complete, i) => (
