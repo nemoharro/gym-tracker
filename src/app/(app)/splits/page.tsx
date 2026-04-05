@@ -175,7 +175,13 @@ export default function SplitsPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-xl font-bold">Weekly Schedule</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">Weekly Schedule</h1>
+        <Link href="/workout" className="flex items-center gap-1 text-sm text-muted hover:text-foreground">
+          <X className="h-4 w-4" />
+          Close
+        </Link>
+      </div>
       <p className="text-sm text-muted">Tap a day to assign a workout type.</p>
 
       <div className="space-y-2">

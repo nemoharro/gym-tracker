@@ -647,44 +647,41 @@ export default function FoodPage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted" />
         </div>
       ) : (
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            <div>
-              <h2 className="font-semibold">Food Log</h2>
-              {totals.calories > 0 && (
-                <span className="text-xs text-muted">{Math.round(totals.calories)} kcal total</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowQuickAdd(false); }}
-                className="flex items-center gap-1 text-sm text-muted font-medium"
-              >
-                <PlusCircle className="h-3.5 w-3.5" />
-                Create
-              </button>
-              <button
-                onClick={() => { setShowQuickAdd(!showQuickAdd); setShowAddForm(false); setShowCreateFood(false); }}
-                className="flex items-center gap-1 text-sm text-muted font-medium"
-              >
-                <Zap className="h-3.5 w-3.5" />
-                Quick
-              </button>
-              <button
-                onClick={() => { setShowAddForm(!showAddForm); setShowQuickAdd(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
-                className="flex items-center gap-1 text-sm text-primary font-medium"
-              >
-                <Plus className="h-4 w-4" />
-                Add
-              </button>
-            </div>
-          </div>
+        <>
+        {/* Add Food Actions */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setShowAddForm(!showAddForm); setShowQuickAdd(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAddForm ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+          >
+            <Plus className="h-4 w-4" />
+            Add Food
+          </button>
+          <button
+            onClick={() => { setShowQuickAdd(!showQuickAdd); setShowAddForm(false); setShowCreateFood(false); }}
+            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showQuickAdd ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+          >
+            <Zap className="h-4 w-4" />
+            Quick
+          </button>
+          <button
+            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowQuickAdd(false); }}
+            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+            Create
+          </button>
+        </div>
 
-          {/* Quick add form */}
-          {showQuickAdd && (
-            <div className="p-4 border-b border-border bg-secondary/30 space-y-2">
+        {/* Quick add form */}
+        {showQuickAdd && (
+          <div className="bg-card rounded-xl border border-border p-4 space-y-2">
+            <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted font-medium">Quick calorie entry</p>
+              <button onClick={() => setShowQuickAdd(false)} className="p-1 text-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -711,13 +708,18 @@ export default function FoodPage() {
               >
                 Log {quickCalories ? `${quickCalories} kcal` : ""}
               </button>
-            </div>
-          )}
+          </div>
+        )}
 
-          {/* Create custom food form */}
-          {showCreateFood && (
-            <div className="p-4 border-b border-border bg-secondary/30 space-y-3">
+        {/* Create custom food form */}
+        {showCreateFood && (
+          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted font-medium">Create custom food (per 100g)</p>
+              <button onClick={() => setShowCreateFood(false)} className="p-1 text-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
               <input
                 type="text"
                 placeholder="Food name"
@@ -751,8 +753,19 @@ export default function FoodPage() {
               >
                 {creatingSaving ? "Saving..." : "Save Food"}
               </button>
+          </div>
+        )}
+
+        {/* Food Log - separate card */}
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div>
+              <h2 className="font-semibold">Today's Log</h2>
+              {totals.calories > 0 && (
+                <span className="text-xs text-muted">{Math.round(totals.calories)} kcal total</span>
+              )}
             </div>
-          )}
+          </div>
 
           {/* Food entries */}
           {entries.map((entry) => (
@@ -805,18 +818,25 @@ export default function FoodPage() {
             </div>
           ))}
 
-          {entries.length === 0 && !showAddForm && (
+          {entries.length === 0 && (
             <div className="px-4 py-3 text-sm text-muted">No items logged</div>
           )}
+        </div>
 
-          {/* Add form */}
-          {showAddForm && (
-            <div className="p-4 border-t border-border space-y-3 bg-secondary/30">
-              <div className="relative">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Food name (e.g. chicken breast)"
+        {/* Add form - separate card */}
+        {showAddForm && (
+          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-medium">Add Food</p>
+              <button onClick={() => { setShowAddForm(false); resetForm(); }} className="p-1 text-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="relative">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Food name (e.g. chicken breast)"
                     value={foodName}
                     onChange={(e) => { setFoodName(e.target.value); setEstimated(null); setEditableEstimate(null); }}
                     onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
@@ -944,9 +964,9 @@ export default function FoodPage() {
                   </div>
                 );
               })()}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* Barcode scanner modal */}
