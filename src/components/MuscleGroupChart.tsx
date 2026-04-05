@@ -72,7 +72,7 @@ export function MuscleGroupChart({ data, muscleGroups }: MuscleGroupChartProps) 
               color: "#ededed",
             }}
             labelStyle={{ color: "#a1a1a1" }}
-            formatter={(value) => [`${Number(value).toLocaleString()} kg`]}
+            formatter={(value) => [`${Number(value).toFixed(1)} kg avg e1RM`]}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           {muscleGroups.map((group, i) => (

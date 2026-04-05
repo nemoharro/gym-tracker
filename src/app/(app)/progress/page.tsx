@@ -55,7 +55,7 @@ function OverloadSection() {
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <h2 className="text-sm font-medium text-muted mb-3">
-        Total Volume by Muscle Group (Last 90 Days)
+        Avg Strength by Muscle Group (Last 90 Days)
       </h2>
       {loading ? (
         <div className="h-72 flex items-center justify-center text-muted text-sm">

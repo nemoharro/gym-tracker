@@ -76,8 +76,9 @@ export function useMuscleGroupProgress() {
         exerciseGroupMap.set(ex.id, ex.muscle_group);
       }
 
-      // Aggregate volume by (date, muscleGroup)
-      const volumeMap = new Map<string, Map<string, number>>();
+      // Calculate avg estimated 1RM per muscle group per day
+      // Structure: date -> muscleGroup -> exerciseId -> best e1RM
+      const e1rmMap = new Map<string, Map<string, Map<number, number>>>();
       const allGroups = new Set<string>();
 
       for (const set of sets) {
@@ -85,19 +86,35 @@ export function useMuscleGroupProgress() {
         const group = exerciseGroupMap.get(set.exercise_id);
         if (!dateStr || !group) continue;
 
+        const weight = Number(set.weight_kg);
+        const reps = Number(set.reps);
+        if (weight <= 0 || reps <= 0) continue;
+
+        // Brzycki estimated 1RM (clamped at 36 reps)
+        const clampedReps = Math.min(reps, 36);
+        const e1rm = clampedReps === 1 ? weight : weight * (36 / (37 - clampedReps));
+
         allGroups.add(group);
-        if (!volumeMap.has(dateStr)) {
-          volumeMap.set(dateStr, new Map());
+        if (!e1rmMap.has(dateStr)) {
+          e1rmMap.set(dateStr, new Map());
         }
-        const dayMap = volumeMap.get(dateStr)!;
-        dayMap.set(group, (dayMap.get(group) ?? 0) + Number(set.weight_kg) * Number(set.reps));
+        const dayMap = e1rmMap.get(dateStr)!;
+        if (!dayMap.has(group)) {
+          dayMap.set(group, new Map());
+        }
+        const groupMap = dayMap.get(group)!;
+        // Keep the best e1RM per exercise
+        const current = groupMap.get(set.exercise_id) ?? 0;
+        if (e1rm > current) {
+          groupMap.set(set.exercise_id, e1rm);
+        }
       }
 
       const sortedGroups = [...allGroups].sort();
-      const sortedDates = [...volumeMap.keys()].sort();
+      const sortedDates = [...e1rmMap.keys()].sort();
 
       const points: MuscleGroupDataPoint[] = sortedDates.map((dateStr) => {
-        const dayMap = volumeMap.get(dateStr)!;
+        const dayMap = e1rmMap.get(dateStr)!;
         const point: MuscleGroupDataPoint = {
           date: new Date(dateStr).toLocaleDateString("en-AU", {
             day: "numeric",
@@ -105,9 +122,12 @@ export function useMuscleGroupProgress() {
           }),
         };
         for (const group of sortedGroups) {
-          const vol = dayMap.get(group);
-          if (vol !== undefined) {
-            point[group] = Math.round(vol);
+          const exerciseMap = dayMap.get(group);
+          if (exerciseMap && exerciseMap.size > 0) {
+            // Average the best e1RM across exercises in this muscle group
+            const values = [...exerciseMap.values()];
+            const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
+            point[group] = Math.round(avg * 10) / 10;
           }
         }
         return point;
