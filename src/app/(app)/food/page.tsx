@@ -6,6 +6,7 @@ import { MacroSummary } from "@/components/MacroSummary";
 import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed, CheckCircle, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { BarcodeScanner, isBarcodeSupported } from "@/components/BarcodeScanner";
+import { getServingSizes } from "@/lib/servingSizes";
 
 interface FoodLogEntry {
   id: number;
@@ -1201,6 +1202,28 @@ export default function FoodPage() {
                   </button>
                 </div>
               )}
+
+              {/* Serving size suggestions */}
+              {(() => {
+                const servings = getServingSizes(foodName);
+                if (!servings || selectedMeal) return null;
+                return (
+                  <div className="flex flex-wrap gap-1.5">
+                    {servings.map((s) => (
+                      <button
+                        key={s.label}
+                        type="button"
+                        onClick={() => { setQuantity(String(s.grams)); setQuantityUnit("g"); }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                          quantity === String(s.grams) ? "bg-primary text-primary-foreground border-primary" : "bg-secondary border-border text-muted hover:text-foreground"
+                        }`}
+                      >
+                        {s.label} ({s.grams}g)
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {estimateError && (
                 <p className="text-xs text-destructive">{estimateError}</p>

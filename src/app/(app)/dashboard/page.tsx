@@ -44,14 +44,18 @@ function getGreeting(): string {
 }
 
 function getDailyQuote(): string {
+  // Changes at midnight each day (local time)
   const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
-  return QUOTES[dayOfYear % QUOTES.length];
+  const daysSinceEpoch = Math.floor(now.getTime() / 86400000) + Math.round(now.getTimezoneOffset() / -1440);
+  return QUOTES[Math.abs(daysSinceEpoch) % QUOTES.length];
 }
 
-function formatDateISO(date: Date): string {
-  return date.toISOString().split("T")[0];
+// Format a local Date to YYYY-MM-DD without UTC conversion
+function toLocalDateStr(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function getMondayOfWeek(date: Date): Date {
@@ -70,12 +74,18 @@ function getDaysAgo(n: number): Date {
   return d;
 }
 
+// Convert a UTC timestamp to local YYYY-MM-DD
+function utcToLocalDateStr(isoTimestamp: string): string {
+  const d = new Date(isoTimestamp);
+  return toLocalDateStr(d);
+}
+
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
 function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+    <div className="h-2 bg-secondary rounded-full overflow-hidden">
       <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
     </div>
   );
@@ -87,6 +97,7 @@ export default function DashboardPage() {
   const [displayName, setDisplayName] = useState<string | null>(null);
 
   const [weekSessionDates, setWeekSessionDates] = useState<Set<number>>(new Set());
+  const [weekSessionCount, setWeekSessionCount] = useState(0);
   const [scheduledDayCount, setScheduledDayCount] = useState(0);
   const [totalSessions, setTotalSessions] = useState(0);
 
@@ -107,7 +118,7 @@ export default function DashboardPage() {
     if (!user) { setLoading(false); return; }
 
     const today = new Date();
-    const todayStr = formatDateISO(today);
+    const todayStr = toLocalDateStr(today);
     const monday = getMondayOfWeek(today);
     const sunday = new Date(monday);
     sunday.setDate(sunday.getDate() + 6);
@@ -125,16 +136,16 @@ export default function DashboardPage() {
         .lte("started_at", new Date(sunday.getTime() + 86400000).toISOString()),
       supabase.from("split_schedule").select("day_of_week, is_rest_day").eq("user_id", user.id),
       supabase.from("body_weight_logs").select("logged_at, weight_kg").eq("user_id", user.id)
-        .gte("logged_at", formatDateISO(fourteenDaysAgo)).order("logged_at", { ascending: true }),
+        .gte("logged_at", toLocalDateStr(fourteenDaysAgo)).order("logged_at", { ascending: true }),
       supabase.from("body_weight_logs").select("logged_at, weight_kg").eq("user_id", user.id)
-        .gte("logged_at", formatDateISO(thirtyDaysAgo)).order("logged_at", { ascending: true }),
+        .gte("logged_at", toLocalDateStr(thirtyDaysAgo)).order("logged_at", { ascending: true }),
       supabase.from("food_log").select("calories, protein, carbs, fat").eq("user_id", user.id)
-        .eq("logged_at", todayStr).eq("status", "finalized"),
+        .eq("logged_at", todayStr),
       supabase.from("nutrition_targets").select("*").eq("user_id", user.id).limit(1).maybeSingle(),
       supabase.from("body_weight_logs").select("logged_at").eq("user_id", user.id)
-        .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
+        .gte("logged_at", toLocalDateStr(sevenDaysAgo)),
       supabase.from("food_log").select("logged_at").eq("user_id", user.id)
-        .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
+        .gte("logged_at", toLocalDateStr(sevenDaysAgo)),
       supabase.from("workout_sessions").select("started_at").eq("user_id", user.id)
         .gte("started_at", sevenDaysAgo.toISOString()),
       supabase.from("workout_sessions").select("id").eq("user_id", user.id),
@@ -151,6 +162,7 @@ export default function DashboardPage() {
       }
     }
     setWeekSessionDates(sessionDays);
+    setWeekSessionCount(weekSessionsRes.data?.length ?? 0);
     if (scheduleRes.data) setScheduledDayCount(scheduleRes.data.filter(s => !s.is_rest_day).length);
     setTotalSessions(allSessionsRes.data?.length ?? 0);
 
@@ -160,7 +172,8 @@ export default function DashboardPage() {
         date: new Date(w.logged_at + "T00:00:00").toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
         weight: Number(w.weight_kg),
       })));
-      setTodayWeight(weightRes.data.find(w => w.logged_at === todayStr) ? Number(weightRes.data.find(w => w.logged_at === todayStr)!.weight_kg) : null);
+      const todayEntry = weightRes.data.find(w => w.logged_at === todayStr);
+      setTodayWeight(todayEntry ? Number(todayEntry.weight_kg) : null);
     }
     if (weight30Res.data && weight30Res.data.length >= 2) {
       const first = Number(weight30Res.data[0].weight_kg);
@@ -168,40 +181,66 @@ export default function DashboardPage() {
       setWeightChange(Math.round((last - first) * 10) / 10);
     }
 
-    // Food
+    // Food — count all entries (draft + finalized)
     if (foodTodayRes.data && foodTodayRes.data.length > 0) {
       let cal = 0, pro = 0, carb = 0, f = 0;
-      for (const e of foodTodayRes.data) { cal += Number(e.calories) || 0; pro += Number(e.protein) || 0; carb += Number(e.carbs) || 0; f += Number(e.fat) || 0; }
+      for (const e of foodTodayRes.data) {
+        cal += Number(e.calories) || 0;
+        pro += Number(e.protein) || 0;
+        carb += Number(e.carbs) || 0;
+        f += Number(e.fat) || 0;
+      }
       setTodayMacros({ calories: cal, protein: pro, carbs: carb, fat: f });
     }
     if (targetsRes.data) {
-      setNutritionTargets({ calories: Number(targetsRes.data.calories), protein: Number(targetsRes.data.protein_g), carbs: Number(targetsRes.data.carbs_g), fat: Number(targetsRes.data.fat_g) });
+      setNutritionTargets({
+        calories: Number(targetsRes.data.calories),
+        protein: Number(targetsRes.data.protein_g),
+        carbs: Number(targetsRes.data.carbs_g),
+        fat: Number(targetsRes.data.fat_g),
+      });
     }
 
-    // Streak
+    // Streak — uses local dates throughout
     const weightDates = new Set(streakWeightRes.data?.map(w => w.logged_at) ?? []);
     const foodDates = new Set(streakFoodRes.data?.map(f => f.logged_at) ?? []);
-    const workoutDates = new Set(streakWorkoutRes.data?.map(w => new Date(w.started_at).toISOString().split("T")[0]) ?? []);
+    // Workout timestamps need local date conversion
+    const workoutDates = new Set(
+      streakWorkoutRes.data?.map(w => utcToLocalDateStr(w.started_at)) ?? []
+    );
 
     const scheduleMap = new Map<number, boolean>();
-    if (scheduleRes.data) { for (const s of scheduleRes.data) scheduleMap.set(s.day_of_week, s.is_rest_day); }
+    if (scheduleRes.data) {
+      for (const s of scheduleRes.data) scheduleMap.set(s.day_of_week, s.is_rest_day);
+    }
 
     const days: boolean[] = [];
     const labels: string[] = [];
     const abbrevs = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     for (let i = 6; i >= 0; i--) {
       const d = getDaysAgo(i);
-      const ds = formatDateISO(d);
+      const ds = toLocalDateStr(d);
       const dow = d.getDay();
+
+      const hasWeight = weightDates.has(ds);
+      const hasFood = foodDates.has(ds);
+      const hasGym = workoutDates.has(ds);
+
+      // Gym required only if schedule explicitly says this day is not a rest day
       const schedEntry = scheduleMap.get(dow);
       const gymRequired = schedEntry !== undefined && !schedEntry;
-      days.push(weightDates.has(ds) && foodDates.has(ds) && (!gymRequired || workoutDates.has(ds)));
+
+      days.push(hasWeight && hasFood && (!gymRequired || hasGym));
       labels.push(abbrevs[dow]);
     }
     setStreakDays(days);
     setStreakDayLabels(labels);
+
     let streak = 0;
-    for (let i = days.length - 1; i >= 0; i--) { if (days[i]) streak++; else break; }
+    for (let i = days.length - 1; i >= 0; i--) {
+      if (days[i]) streak++;
+      else break;
+    }
     setCurrentStreak(streak);
 
     setLoading(false);
@@ -217,68 +256,74 @@ export default function DashboardPage() {
   const greeting = displayName ? `${getGreeting()}, ${displayName}` : getGreeting();
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-5 space-y-5">
       {/* Greeting + Quote */}
-      <div>
-        <h1 className="text-xl font-bold">{greeting}</h1>
-        <p className="text-xs text-muted italic mt-1">&ldquo;{getDailyQuote()}&rdquo;</p>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold">{greeting}</h1>
+        <p className="text-sm text-muted italic leading-relaxed">
+          &ldquo;{getDailyQuote()}&rdquo;
+        </p>
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-2">
-        <Link href="/workout" className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-xl p-3 text-sm font-semibold active:opacity-80">
-          <Dumbbell className="h-4 w-4" />
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/workout" className="flex items-center justify-center gap-2.5 bg-primary text-primary-foreground rounded-xl p-5 text-base font-semibold active:opacity-80">
+          <Dumbbell className="h-5 w-5" />
           Start Workout
         </Link>
-        <Link href="/food" className="flex items-center justify-center gap-2 bg-card border border-border rounded-xl p-3 text-sm font-semibold active:opacity-80">
-          <UtensilsCrossed className="h-4 w-4" />
+        <Link href="/food" className="flex items-center justify-center gap-2.5 bg-card border border-border rounded-xl p-5 text-base font-semibold active:opacity-80">
+          <UtensilsCrossed className="h-5 w-5" />
           Log Food
         </Link>
       </div>
 
       {/* Daily Streak */}
-      <div className="bg-card border border-border rounded-xl px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5">
-            <Flame className="h-4 w-4 text-orange-500" />
-            <span className="text-sm font-semibold">
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Flame className="h-5 w-5 text-orange-500" />
+            <span className="text-base font-semibold">
               {currentStreak > 0 ? `${currentStreak} day streak` : "Start your streak"}
             </span>
           </div>
-          <span className="text-[10px] text-muted">weight + food + gym</span>
+          <span className="text-xs text-muted">weight + food + gym</span>
         </div>
         <div className="flex justify-around">
           {streakDays.map((complete, i) => (
-            <div key={i} className="flex flex-col items-center gap-0.5">
-              <span className={`text-base ${complete ? "" : "opacity-20"}`}>{complete ? "\uD83D\uDD25" : "\u26AA"}</span>
-              <span className="text-[10px] text-muted">{streakDayLabels[i]}</span>
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <span className={`text-xl ${complete ? "" : "opacity-20"}`}>
+                {complete ? "\uD83D\uDD25" : "\u26AA"}
+              </span>
+              <span className="text-xs text-muted font-medium">{streakDayLabels[i]}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Compact Nutrition */}
-      <div className="bg-card border border-border rounded-xl px-4 py-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold">Nutrition</span>
-          <span className="text-xs text-muted">{Math.round(t.calories - todayMacros.calories)} kcal left</span>
+      {/* Nutrition */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-base font-semibold">Today&apos;s Nutrition</span>
+          <span className="text-sm text-muted">
+            {Math.round(t.calories - todayMacros.calories)} kcal left
+          </span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-4">
           <div>
-            <div className="flex justify-between text-xs mb-0.5">
+            <div className="flex justify-between text-sm mb-1.5">
               <span className="text-muted">Calories</span>
-              <span>{Math.round(todayMacros.calories)} / {t.calories}</span>
+              <span className="font-semibold">{Math.round(todayMacros.calories)} / {t.calories}</span>
             </div>
             <MiniBar value={todayMacros.calories} max={t.calories} color="bg-primary" />
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-4">
             {([
               { label: "Protein", value: todayMacros.protein, max: t.protein, color: "bg-red-500" },
               { label: "Carbs", value: todayMacros.carbs, max: t.carbs, color: "bg-yellow-500" },
               { label: "Fat", value: todayMacros.fat, max: t.fat, color: "bg-orange-500" },
             ] as const).map(m => (
               <div key={m.label}>
-                <div className="flex justify-between text-[10px] text-muted mb-0.5">
+                <div className="flex justify-between text-xs text-muted mb-1.5">
                   <span>{m.label}</span>
                   <span>{Math.round(m.value)}/{m.max}g</span>
                 </div>
@@ -290,52 +335,64 @@ export default function DashboardPage() {
       </div>
 
       {/* This Week + Weight — side by side */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className="bg-card border border-border rounded-xl px-3 py-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold">This Week</span>
-            <span className="text-[10px] text-muted">
-              {weekSessionDates.size}{scheduledDayCount > 0 ? `/${scheduledDayCount}` : ""}
-              {totalSessions > 0 && ` \u00B7 ${totalSessions} total`}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-semibold">This Week</span>
+            <span className="text-xs text-muted font-medium">
+              {weekSessionCount} session{weekSessionCount !== 1 ? "s" : ""}
             </span>
           </div>
-          <div className="flex justify-around">
+          <div className="flex justify-around mb-3">
             {DAY_LABELS.map((label, i) => (
-              <div key={i} className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${weekSessionDates.has(i) ? "bg-primary text-primary-foreground" : "bg-secondary text-muted"}`}>
+              <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${weekSessionDates.has(i) ? "bg-primary text-primary-foreground" : "bg-secondary text-muted"}`}>
                 {label}
               </div>
             ))}
           </div>
+          {scheduledDayCount > 0 && (
+            <p className="text-xs text-muted text-center">
+              {weekSessionDates.size}/{scheduledDayCount} scheduled
+            </p>
+          )}
         </div>
 
-        <div className="bg-card border border-border rounded-xl px-3 py-2.5">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold flex items-center gap-1">
-              <Scale className="h-3 w-3 text-muted" />
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold flex items-center gap-1.5">
+              <Scale className="h-4 w-4 text-muted" />
               Weight
             </span>
-            {todayWeight && <span className="text-xs font-bold">{todayWeight.toFixed(1)}kg</span>}
+            {todayWeight && <span className="text-sm font-bold">{todayWeight.toFixed(1)}kg</span>}
           </div>
           {weightData.length > 1 ? (
-            <div className="h-10">
+            <div className="h-16">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weightData}>
                   <YAxis domain={["dataMin - 0.5", "dataMax + 0.5"]} hide />
-                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={1.5} dot={false} />
+                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <Link href="/weight" className="text-[10px] text-primary">Log weight</Link>
+            <Link href="/weight" className="text-xs text-primary font-medium">Log weight</Link>
           )}
           {weightChange !== null && (
-            <div className="flex items-center gap-1 mt-1">
-              {weightChange < 0 ? <TrendingDown className="h-3 w-3 text-green-500" /> : weightChange > 0 ? <TrendingUp className="h-3 w-3 text-red-500" /> : <Minus className="h-3 w-3 text-muted" />}
-              <span className="text-[10px] text-muted">{weightChange > 0 ? "+" : ""}{weightChange}kg / 30d</span>
+            <div className="flex items-center gap-1 mt-2">
+              {weightChange < 0 ? <TrendingDown className="h-3.5 w-3.5 text-green-500" /> : weightChange > 0 ? <TrendingUp className="h-3.5 w-3.5 text-red-500" /> : <Minus className="h-3.5 w-3.5 text-muted" />}
+              <span className="text-xs text-muted">{weightChange > 0 ? "+" : ""}{weightChange}kg / 30d</span>
             </div>
           )}
         </div>
       </div>
+
+      {/* All-time sessions */}
+      {totalSessions > 0 && (
+        <div className="bg-card border border-border rounded-xl p-5 text-center">
+          <p className="text-3xl font-bold text-primary">{totalSessions}</p>
+          <p className="text-sm text-muted mt-1">total sessions logged</p>
+        </div>
+      )}
     </div>
   );
 }
