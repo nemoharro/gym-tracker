@@ -4,10 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { BodyWeightChart } from "@/components/BodyWeightChart";
 import { Loader2, Minus, Plus, Scale, Check, CheckCircle, Pencil } from "lucide-react";
-
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
+import { toLocalDateStr } from "@/lib/dates";
 
 export default function WeightPage() {
   const supabase = createClient();
@@ -18,7 +15,7 @@ export default function WeightPage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const today = formatDate(new Date());
+  const today = toLocalDateStr(new Date());
 
   const fetchData = useCallback(async () => {
     setLoading(true);

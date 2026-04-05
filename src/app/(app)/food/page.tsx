@@ -6,6 +6,7 @@ import { MacroSummary } from "@/components/MacroSummary";
 import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed, CheckCircle, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { BarcodeScanner, isBarcodeSupported } from "@/components/BarcodeScanner";
+import { toLocalDateStr } from "@/lib/dates";
 import { getServingSizes } from "@/lib/servingSizes";
 
 interface FoodLogEntry {
@@ -42,17 +43,13 @@ interface EstimatedNutrition {
   brand?: string;
 }
 
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
-}
-
 function displayDate(date: Date): string {
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
 
-  if (formatDate(date) === formatDate(today)) return "Today";
-  if (formatDate(date) === formatDate(yesterday)) return "Yesterday";
+  if (toLocalDateStr(date) === toLocalDateStr(today)) return "Today";
+  if (toLocalDateStr(date) === toLocalDateStr(yesterday)) return "Yesterday";
   return date.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
 }
 
@@ -136,7 +133,7 @@ export default function FoodPage() {
   // Meal picker within add food
   const [showMealList, setShowMealList] = useState(false);
 
-  const dateStr = formatDate(currentDate);
+  const dateStr = toLocalDateStr(currentDate);
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, Send, Loader2, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { toLocalDateStr } from "@/lib/dates";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -51,7 +52,7 @@ export default function CoachPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = toLocalDateStr(new Date());
 
     const [foodRes, targetRes] = await Promise.all([
       supabase.from("food_log").select("calories, protein, carbs, fat").eq("user_id", user.id)
@@ -138,7 +139,7 @@ export default function CoachPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoggingIndex(null); return; }
 
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = toLocalDateStr(new Date());
 
     for (const food of msg.foods) {
       // Save to personal foods DB

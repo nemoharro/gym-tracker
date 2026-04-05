@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import { toLocalDateStr } from "@/lib/dates";
 import { Dumbbell, UtensilsCrossed, Flame, Loader2, Scale, TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 
@@ -50,13 +51,7 @@ function getDailyQuote(): string {
   return QUOTES[Math.abs(daysSinceEpoch) % QUOTES.length];
 }
 
-// Format a local Date to YYYY-MM-DD without UTC conversion
-function toLocalDateStr(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+// toLocalDateStr imported from @/lib/dates
 
 function getMondayOfWeek(date: Date): Date {
   const d = new Date(date);

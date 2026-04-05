@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { toLocalDateStr } from "@/lib/dates";
 
 export interface MuscleGroupDataPoint {
   date: string;
@@ -48,7 +49,7 @@ export function useMuscleGroupProgress() {
       const sessionDateMap = new Map<number, string>();
       for (const s of sessions) {
         // Truncate to date only
-        sessionDateMap.set(s.id, s.started_at.split("T")[0]);
+        sessionDateMap.set(s.id, toLocalDateStr(new Date(s.started_at)));
       }
 
       // Fetch sets and exercises in parallel
