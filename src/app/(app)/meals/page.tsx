@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MealCard } from "@/components/MealCard";
-import { Plus } from "lucide-react";
+import { Plus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 interface MealWithTotals {
@@ -118,7 +118,15 @@ export default function MealsPage() {
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold">Saved Meals</h1>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard"
+            className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <h1 className="text-xl font-bold">Saved Meals</h1>
+        </div>
         <Link
           href="/meals/create"
           className="flex items-center gap-1.5 bg-primary text-primary-foreground text-sm font-medium px-3 py-2 rounded-lg"

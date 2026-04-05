@@ -263,11 +263,9 @@ export default function WorkoutPage() {
         {/* Empty workout option */}
         <button
           onClick={() => startWorkout()}
-          className={`w-full py-3 rounded-xl font-semibold active:opacity-80 transition-opacity ${
-            todaysWorkout ? "bg-secondary text-foreground" : "bg-primary text-primary-foreground text-lg"
-          }`}
+          className="w-full py-3 rounded-xl font-semibold active:opacity-80 transition-opacity bg-primary text-primary-foreground"
         >
-          {todaysWorkout ? "Start Empty Workout" : "Start Workout"}
+          Start Workout
         </button>
       </div>
     );
