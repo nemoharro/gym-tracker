@@ -75,21 +75,29 @@ export function MacroSummary({ calories, protein, carbs, fat, fiber, targets, on
     else if (key === "fat") setEditFat(value);
   }
 
-  const remainingCal = Math.round(t.calories - calories);
+  const currentCalTarget = isEditing ? editCalories : t.calories;
+  const remainingCal = Math.round(currentCalTarget - calories);
 
   return (
     <div className="space-y-3 p-4 bg-card rounded-xl border border-border">
-      {/* Remaining calories hero */}
-      {!isEditing && (
-        <div className="text-center pb-2 border-b border-border">
-          <p className={`text-3xl font-bold ${remainingCal < 0 ? "text-destructive" : "text-foreground"}`}>
-            {Math.abs(remainingCal)}
-          </p>
-          <p className="text-xs text-muted">
-            {remainingCal >= 0 ? "kcal remaining" : "kcal over"}
-          </p>
-        </div>
-      )}
+      {/* Remaining calories hero — always visible, live-updates during editing */}
+      <div className="text-center pb-2 border-b border-border">
+        {isEditing ? (
+          <>
+            <p className="text-3xl font-bold text-primary">{editCalories}</p>
+            <p className="text-xs text-muted">kcal goal (auto-calculated)</p>
+          </>
+        ) : (
+          <>
+            <p className={`text-3xl font-bold ${remainingCal < 0 ? "text-destructive" : "text-foreground"}`}>
+              {Math.abs(remainingCal)}
+            </p>
+            <p className="text-xs text-muted">
+              {remainingCal >= 0 ? "kcal remaining" : "kcal over"}
+            </p>
+          </>
+        )}
+      </div>
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium">Daily Nutrition</span>
         {onTargetsChange && !isEditing && (
