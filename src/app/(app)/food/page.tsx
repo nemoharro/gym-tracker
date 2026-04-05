@@ -756,73 +756,6 @@ export default function FoodPage() {
           </div>
         )}
 
-        {/* Food Log - separate card */}
-        <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="flex items-center justify-between p-4 border-b border-border">
-            <div>
-              <h2 className="font-semibold">Today's Log</h2>
-              {totals.calories > 0 && (
-                <span className="text-xs text-muted">{Math.round(totals.calories)} kcal total</span>
-              )}
-            </div>
-          </div>
-
-          {/* Food entries */}
-          {entries.map((entry) => (
-            <div key={entry.id} className="border-b border-border last:border-b-0">
-              {editingEntryId === entry.id ? (
-                <div className="p-4 space-y-2 bg-secondary/30">
-                  <p className="text-sm font-medium">{entry.food_name || "Unknown food"}</p>
-                  <div className="grid grid-cols-5 gap-2 text-xs">
-                    {(["calories", "protein", "carbs", "fat", "fiber"] as const).map((key) => (
-                      <div key={key}>
-                        <label className="text-muted capitalize block mb-1">{key === "calories" ? "Cal" : key}</label>
-                        <input
-                          type="number"
-                          value={editEntryValues[key]}
-                          onChange={(e) => setEditEntryValues({ ...editEntryValues, [key]: parseFloat(e.target.value) || 0 })}
-                          className="w-full px-1.5 py-1 bg-background border border-border rounded text-sm text-center"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <button onClick={() => setEditingEntryId(null)} className="p-1.5 text-muted hover:text-foreground">
-                      <X className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => saveEditEntry(entry.id)} className="p-1.5 text-primary hover:text-primary/80">
-                      <Check className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{entry.food_name || "Unknown food"}</p>
-                    <p className="text-xs text-muted">
-                      {entry.quantity_g}g &middot; P:{Math.round(entry.protein)}g &middot; C:{Math.round(entry.carbs)}g &middot; F:{Math.round(entry.fat)}g
-                      {entry.fiber != null && entry.fiber > 0 && <> &middot; Fb:{Math.round(entry.fiber)}g</>}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{entry.calories} kcal</span>
-                    <button onClick={() => startEditEntry(entry)} className="p-1 text-muted hover:text-foreground">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button onClick={() => handleDelete(entry.id)} className="text-muted hover:text-destructive">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-
-          {entries.length === 0 && (
-            <div className="px-4 py-3 text-sm text-muted">No items logged</div>
-          )}
-        </div>
-
         {/* Add form - separate card */}
         {showAddForm && (
           <div className="bg-card rounded-xl border border-border p-4 space-y-3">
@@ -966,6 +899,72 @@ export default function FoodPage() {
               })()}
           </div>
         )}
+
+        {/* Food Log - separate card */}
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <div>
+              <h2 className="font-semibold">Today's Log</h2>
+              {totals.calories > 0 && (
+                <span className="text-xs text-muted">{Math.round(totals.calories)} kcal total</span>
+              )}
+            </div>
+          </div>
+
+          {entries.map((entry) => (
+            <div key={entry.id} className="border-b border-border last:border-b-0">
+              {editingEntryId === entry.id ? (
+                <div className="p-4 space-y-2 bg-secondary/30">
+                  <p className="text-sm font-medium">{entry.food_name || "Unknown food"}</p>
+                  <div className="grid grid-cols-5 gap-2 text-xs">
+                    {(["calories", "protein", "carbs", "fat", "fiber"] as const).map((key) => (
+                      <div key={key}>
+                        <label className="text-muted capitalize block mb-1">{key === "calories" ? "Cal" : key}</label>
+                        <input
+                          type="number"
+                          value={editEntryValues[key]}
+                          onChange={(e) => setEditEntryValues({ ...editEntryValues, [key]: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-1.5 py-1 bg-background border border-border rounded text-sm text-center"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditingEntryId(null)} className="p-1.5 text-muted hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => saveEditEntry(entry.id)} className="p-1.5 text-primary hover:text-primary/80">
+                      <Check className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{entry.food_name || "Unknown food"}</p>
+                    <p className="text-xs text-muted">
+                      {entry.quantity_g}g &middot; P:{Math.round(entry.protein)}g &middot; C:{Math.round(entry.carbs)}g &middot; F:{Math.round(entry.fat)}g
+                      {entry.fiber != null && entry.fiber > 0 && <> &middot; Fb:{Math.round(entry.fiber)}g</>}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{entry.calories} kcal</span>
+                    <button onClick={() => startEditEntry(entry)} className="p-1 text-muted hover:text-foreground">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(entry.id)} className="text-muted hover:text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {entries.length === 0 && (
+            <div className="px-4 py-3 text-sm text-muted">No items logged</div>
+          )}
+        </div>
         </>
       )}
 
