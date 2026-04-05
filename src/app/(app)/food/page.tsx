@@ -165,11 +165,25 @@ export default function FoodPage() {
       }
     }
 
+    // Also fetch meal names for entries logged via meals
+    const mealIds = [...new Set((logRes.data ?? []).filter(e => e.meal_id).map(e => e.meal_id!))];
+    const mealNameMap = new Map<number, string>();
+    if (mealIds.length > 0) {
+      const { data: meals } = await supabase.from("meals").select("id, name").in("id", mealIds);
+      if (meals) {
+        for (const m of meals) mealNameMap.set(m.id, m.name);
+      }
+    }
+
     if (logRes.data) {
       setEntries(
         logRes.data.map((e) => ({
           ...e,
-          food_name: e.food_id ? foodMap.get(e.food_id) : undefined,
+          food_name: e.food_id
+            ? foodMap.get(e.food_id)
+            : e.meal_id
+              ? mealNameMap.get(e.meal_id)
+              : undefined,
         }))
       );
       // Check if day is finalized (all entries have status 'finalized')
@@ -746,6 +760,7 @@ export default function FoodPage() {
     setSelectedMeal(null);
     setMealPortion("");
     setShowMealPicker(false);
+    setShowAddForm(false);
     fetchData();
   }
 
@@ -777,6 +792,7 @@ export default function FoodPage() {
     setMealLogging(false);
     setSelectedMeal(null);
     setShowMealPicker(false);
+    setShowAddForm(false);
     fetchData();
   }
 
@@ -923,6 +939,15 @@ export default function FoodPage() {
             <Plus className="h-4 w-4" />
             Food
           </button>
+          {barcodeSupported && (
+            <button
+              onClick={() => setScannerOpen(true)}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors bg-card border border-border"
+            >
+              <ScanBarcode className="h-4 w-4" />
+              Scan
+            </button>
+          )}
           <button
             onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
@@ -1065,15 +1090,6 @@ export default function FoodPage() {
                   >
                     <BookOpen className="h-5 w-5" />
                   </button>
-                  {barcodeSupported && (
-                    <button
-                      type="button"
-                      onClick={() => setScannerOpen(true)}
-                      className="p-2 rounded-lg border border-border bg-secondary text-muted hover:text-foreground transition-colors"
-                    >
-                      <ScanBarcode className="h-5 w-5" />
-                    </button>
-                  )}
                 </div>
                 {/* Meal picker dropdown */}
                 {showMealList && savedMeals.length > 0 && (
