@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, Zap, RotateCcw, ScanBarcode, PlusCircle } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
@@ -85,10 +85,12 @@ export default function FoodPage() {
   const [suggestions, setSuggestions] = useState<Array<{ id: number; name: string; calories_per_100g: number; protein_per_100g: number; carbs_per_100g: number; fat_per_100g: number; fiber_per_100g: number }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Quick add
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
-  const [quickCalories, setQuickCalories] = useState("");
-  const [quickName, setQuickName] = useState("");
+  // Ask AI
+  const [showAskAI, setShowAskAI] = useState(false);
+  const [aiDescription, setAiDescription] = useState("");
+  const [aiResults, setAiResults] = useState<Array<{ name: string; quantity_g: number; calories: number; protein: number; carbs: number; fat: number; fiber: number; sugar: number; saturated_fat: number; sodium: number }> | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   // Custom food creation
   const [showCreateFood, setShowCreateFood] = useState(false);
@@ -451,29 +453,56 @@ export default function FoodPage() {
     });
   }
 
-  async function handleQuickAdd() {
-    const cal = parseFloat(quickCalories);
-    if (!cal || cal <= 0) return;
+  async function handleAskAI() {
+    if (!aiDescription.trim()) return;
+    setAiLoading(true);
+    setAiError("");
+    setAiResults(null);
+
+    try {
+      const res = await fetch("/api/ai-food", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: aiDescription }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAiResults(data.foods);
+      } else {
+        setAiError(data.error || "Could not identify foods.");
+      }
+    } catch {
+      setAiError("Failed to process. Try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function handleLogAIResults() {
+    if (!aiResults || aiResults.length === 0) return;
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase.from("food_log").insert({
-      user_id: user.id,
-      logged_at: dateStr,
-      meal_type: "general",
-      food_id: null,
-      quantity_g: null,
-      servings: 1,
-      calories: Math.round(cal),
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-    });
+    for (const food of aiResults) {
+      await supabase.from("food_log").insert({
+        user_id: user.id,
+        logged_at: dateStr,
+        meal_type: "general",
+        food_id: null,
+        quantity_g: food.quantity_g,
+        servings: 1,
+        calories: food.calories,
+        protein: food.protein,
+        carbs: food.carbs,
+        fat: food.fat,
+        fiber: food.fiber,
+      });
+    }
 
-    setQuickCalories("");
-    setQuickName("");
-    setShowQuickAdd(false);
+    setAiDescription("");
+    setAiResults(null);
+    setShowAskAI(false);
     fetchData();
   }
 
@@ -511,7 +540,7 @@ export default function FoodPage() {
     setScannerOpen(false);
     setScanLoading(true);
     setShowAddForm(true);
-    setShowQuickAdd(false);
+    setShowAskAI(false);
     setShowCreateFood(false);
 
     try {
@@ -651,21 +680,21 @@ export default function FoodPage() {
         {/* Add Food Actions */}
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowAddForm(!showAddForm); setShowQuickAdd(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
+            onClick={() => { setShowAddForm(!showAddForm); setShowAskAI(false); setShowCreateFood(false); if (showAddForm) resetForm(); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAddForm ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <Plus className="h-4 w-4" />
             Add Food
           </button>
           <button
-            onClick={() => { setShowQuickAdd(!showQuickAdd); setShowAddForm(false); setShowCreateFood(false); }}
-            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showQuickAdd ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
+            onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); }}
+            className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
-            <Zap className="h-4 w-4" />
-            Quick
+            <MessageCircle className="h-4 w-4" />
+            Ask AI
           </button>
           <button
-            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowQuickAdd(false); }}
+            onClick={() => { setShowCreateFood(!showCreateFood); setShowAddForm(false); setShowAskAI(false); }}
             className={`flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${showCreateFood ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
           >
             <PlusCircle className="h-3.5 w-3.5" />
@@ -673,41 +702,58 @@ export default function FoodPage() {
           </button>
         </div>
 
-        {/* Quick add form */}
-        {showQuickAdd && (
-          <div className="bg-card rounded-xl border border-border p-4 space-y-2">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-muted font-medium">Quick calorie entry</p>
-              <button onClick={() => setShowQuickAdd(false)} className="p-1 text-muted hover:text-foreground">
+        {/* Ask AI form */}
+        {showAskAI && (
+          <div className="bg-card rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted font-medium">Tell me what you ate</p>
+              <button onClick={() => { setShowAskAI(false); setAiResults(null); setAiError(""); }} className="p-1 text-muted hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Food name (optional)"
-                  value={quickName}
-                  onChange={(e) => setQuickName(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                />
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    placeholder="Cal"
-                    value={quickCalories}
-                    onChange={(e) => setQuickCalories(e.target.value)}
-                    className="w-full px-3 py-2 pr-10 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">kcal</span>
+            <textarea
+              placeholder='e.g. "chicken breast with rice and broccoli" or "2 eggs and toast with butter"'
+              value={aiDescription}
+              onChange={(e) => setAiDescription(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary resize-none"
+              rows={2}
+            />
+            <button
+              onClick={handleAskAI}
+              disabled={aiLoading || !aiDescription.trim()}
+              className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5"
+            >
+              {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+              {aiLoading ? "Analyzing..." : "Analyze"}
+            </button>
+
+            {aiError && <p className="text-xs text-destructive">{aiError}</p>}
+
+            {aiResults && aiResults.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted font-medium">Found {aiResults.length} item{aiResults.length > 1 ? "s" : ""}:</p>
+                {aiResults.map((food, i) => (
+                  <div key={i} className="px-3 py-2 bg-secondary/50 rounded-lg text-sm">
+                    <p className="font-medium">{food.name} — {food.quantity_g}g</p>
+                    <p className="text-xs text-muted">
+                      {food.calories} kcal &middot; P:{food.protein}g &middot; C:{food.carbs}g &middot; F:{food.fat}g
+                    </p>
+                  </div>
+                ))}
+                <div className="px-3 py-2 bg-primary/5 rounded-lg text-sm font-medium">
+                  Total: {aiResults.reduce((s, f) => s + f.calories, 0)} kcal &middot;
+                  P:{Math.round(aiResults.reduce((s, f) => s + f.protein, 0))}g &middot;
+                  C:{Math.round(aiResults.reduce((s, f) => s + f.carbs, 0))}g &middot;
+                  F:{Math.round(aiResults.reduce((s, f) => s + f.fat, 0))}g
                 </div>
+                <button
+                  onClick={handleLogAIResults}
+                  className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
+                >
+                  Log All
+                </button>
               </div>
-              <button
-                onClick={handleQuickAdd}
-                disabled={!quickCalories || parseFloat(quickCalories) <= 0}
-                className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
-              >
-                Log {quickCalories ? `${quickCalories} kcal` : ""}
-              </button>
+            )}
           </div>
         )}
 
