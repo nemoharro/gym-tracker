@@ -3,10 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { MacroSummary } from "@/components/MacroSummary";
-import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Mic, MicOff, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed, CheckCircle, Undo2 } from "lucide-react";
+import { Plus, Trash2, ChevronLeft, ChevronRight, Loader2, Sparkles, BookOpen, Pencil, Check, X, RotateCcw, ScanBarcode, PlusCircle, MessageCircle, UtensilsCrossed, CheckCircle, Undo2 } from "lucide-react";
 import Link from "next/link";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { parseFoodSpeech } from "@/lib/parseFoodSpeech";
 import { BarcodeScanner, isBarcodeSupported } from "@/components/BarcodeScanner";
 
 interface FoodLogEntry {
@@ -132,16 +130,8 @@ export default function FoodPage() {
     setBarcodeSupported(isBarcodeSupported());
   }, []);
 
-  const { isListening, transcript, isSupported, startListening, stopListening } = useSpeechRecognition();
-
-  // Handle voice transcript
-  useEffect(() => {
-    if (!transcript) return;
-    const parsed = parseFoodSpeech(transcript);
-    if (parsed.foodName) setFoodName(parsed.foodName);
-    if (parsed.quantity !== null) setQuantity(String(parsed.quantity));
-    setShowAddForm(true);
-  }, [transcript]);
+  // Meal picker within add food
+  const [showMealList, setShowMealList] = useState(false);
 
   const dateStr = formatDate(currentDate);
 
@@ -933,15 +923,6 @@ export default function FoodPage() {
             <Plus className="h-4 w-4" />
             Food
           </button>
-          {barcodeSupported && (
-            <button
-              onClick={() => setScannerOpen(true)}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors bg-card border border-border"
-            >
-              <ScanBarcode className="h-4 w-4" />
-              Scan
-            </button>
-          )}
           <button
             onClick={() => { setShowAskAI(!showAskAI); setShowAddForm(false); setShowCreateFood(false); }}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${showAskAI ? "bg-primary text-primary-foreground" : "bg-card border border-border"}`}
@@ -1075,18 +1056,86 @@ export default function FoodPage() {
                     value={foodName}
                     onChange={(e) => { setFoodName(e.target.value); setEstimated(null); setEditableEstimate(null); }}
                     onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                    className={`flex-1 px-3 py-2 rounded-lg bg-background border text-sm focus:outline-none focus:border-primary ${isListening ? "border-primary ring-2 ring-primary/30 animate-pulse" : "border-border"}`}
+                    className="flex-1 px-3 py-2 rounded-lg bg-background border border-border text-sm focus:outline-none focus:border-primary"
                   />
-                  {isSupported && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowMealList(!showMealList); if (!showMealList) fetchMeals(); }}
+                    className={`p-2 rounded-lg border transition-colors ${showMealList ? "bg-primary/10 border-primary text-primary" : "bg-secondary border-border text-muted hover:text-foreground"}`}
+                  >
+                    <BookOpen className="h-5 w-5" />
+                  </button>
+                  {barcodeSupported && (
                     <button
                       type="button"
-                      onClick={isListening ? stopListening : startListening}
-                      className={`p-2 rounded-lg border transition-colors ${isListening ? "bg-destructive/10 border-destructive text-destructive" : "bg-secondary border-border text-muted hover:text-foreground"}`}
+                      onClick={() => setScannerOpen(true)}
+                      className="p-2 rounded-lg border border-border bg-secondary text-muted hover:text-foreground transition-colors"
                     >
-                      {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                      <ScanBarcode className="h-5 w-5" />
                     </button>
                   )}
                 </div>
+                {/* Meal picker dropdown */}
+                {showMealList && savedMeals.length > 0 && (
+                  <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                    {savedMeals.map((meal) => (
+                      <button
+                        key={meal.id}
+                        onClick={() => {
+                          setSelectedMeal(meal);
+                          setShowMealList(false);
+                          setMealPortion("");
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-secondary transition-colors border-b border-border last:border-b-0"
+                      >
+                        <span className="font-medium">{meal.name}</span>
+                        <span className="text-xs text-muted ml-2">{Math.round(meal.totalCal)} kcal</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showMealList && savedMeals.length === 0 && (
+                  <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg p-3">
+                    <p className="text-xs text-muted text-center">No saved meals. <Link href="/meals/create" className="text-primary">Create one</Link></p>
+                  </div>
+                )}
+                {/* Selected meal portion input */}
+                {selectedMeal && (
+                  <div className="mt-2 p-3 bg-secondary/50 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{selectedMeal.name}</p>
+                      <button onClick={() => setSelectedMeal(null)} className="text-muted hover:text-foreground">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted">
+                      Batch: {selectedMeal.total_weight_g ? `${selectedMeal.total_weight_g}g` : "no weight set"} &middot; {Math.round(selectedMeal.totalCal)} kcal
+                    </p>
+                    {selectedMeal.total_weight_g ? (
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="number"
+                            placeholder="Portion"
+                            value={mealPortion}
+                            onChange={(e) => setMealPortion(e.target.value)}
+                            className="w-full px-3 py-2 pr-6 rounded-lg bg-background border border-border text-sm"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">g</span>
+                        </div>
+                        <button
+                          onClick={handleLogMealPortion}
+                          disabled={mealLogging || !mealPortion}
+                          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50"
+                        >
+                          Log
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-destructive">Set a batch weight when creating this meal to log portions.</p>
+                    )}
+                  </div>
+                )}
                 {/* Autocomplete dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
                   <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden">
