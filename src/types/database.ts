@@ -126,18 +126,21 @@ export type Database = {
           user_id: string
           weight_kg: number
           logged_at: string
+          status: string
         }
         Insert: {
           id?: number
           user_id: string
           weight_kg: number
           logged_at: string
+          status?: string
         }
         Update: {
           id?: number
           user_id?: string
           weight_kg?: number
           logged_at?: string
+          status?: string
         }
         Relationships: []
       }

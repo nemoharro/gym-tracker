@@ -46,6 +46,7 @@ create table public.body_weight_logs (
   user_id uuid references auth.users(id) not null,
   weight_kg numeric(5,1) not null,
   logged_at date default current_date,
+  status text not null default 'draft',
   unique(user_id, logged_at)
 );
 

@@ -91,7 +91,7 @@ export default function DashboardPage() {
         .eq("logged_at", todayStr).eq("status", "finalized"),
       supabase.from("nutrition_targets").select("*").eq("user_id", user.id).limit(1).maybeSingle(),
       supabase.from("body_weight_logs").select("logged_at").eq("user_id", user.id)
-        .gte("logged_at", formatDateISO(sevenDaysAgo)),
+        .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
       supabase.from("food_log").select("logged_at").eq("user_id", user.id)
         .gte("logged_at", formatDateISO(sevenDaysAgo)).eq("status", "finalized"),
       // Streak: workouts last 7 days
