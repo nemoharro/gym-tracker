@@ -96,8 +96,10 @@ export default function FoodPage() {
 
   // Ask AI
   const [showAskAI, setShowAskAI] = useState(false);
+  const [aiMode, setAiMode] = useState<"estimate" | "macros">("estimate");
   const [aiDescription, setAiDescription] = useState("");
   const [aiResults, setAiResults] = useState<Array<{ name: string; quantity_g: number; calories: number; protein: number; carbs: number; fat: number; fiber: number; sugar: number; saturated_fat: number; sodium: number }> | null>(null);
+  const [aiNotes, setAiNotes] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
 
@@ -511,18 +513,45 @@ export default function FoodPage() {
     setAiLoading(true);
     setAiError("");
     setAiResults(null);
+    setAiNotes("");
 
     try {
-      const res = await fetch("/api/ai-food", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: aiDescription }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setAiResults(data.foods);
+      const t = targets ?? { calories: 2500, protein: 180, carbs: 250, fat: 80, fiber: 30 };
+
+      if (aiMode === "macros") {
+        // Hit My Macros mode — send remaining macros
+        const remaining = {
+          calories: Math.max(0, t.calories - totals.calories),
+          protein: Math.max(0, t.protein - totals.protein),
+          carbs: Math.max(0, t.carbs - totals.carbs),
+          fat: Math.max(0, t.fat - totals.fat),
+        };
+
+        const res = await fetch("/api/ai-macro-fit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: aiDescription, remainingMacros: remaining }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setAiResults(data.foods);
+          setAiNotes(data.notes || "");
+        } else {
+          setAiError(data.error || "Could not calculate macros.");
+        }
       } else {
-        setAiError(data.error || "Could not identify foods.");
+        // Estimate mode — existing behavior
+        const res = await fetch("/api/ai-food", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description: aiDescription }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setAiResults(data.foods);
+        } else {
+          setAiError(data.error || "Could not identify foods.");
+        }
       }
     } catch {
       setAiError("Failed to process. Try again.");
@@ -889,6 +918,13 @@ export default function FoodPage() {
         >
           <BookOpen className="h-4 w-4" />
           My Meals
+        </Link>
+        <Link
+          href="/coach"
+          className="flex items-center gap-1.5 px-3 py-2 bg-card border border-border rounded-lg text-sm text-muted hover:text-foreground transition-colors"
+        >
+          <Sparkles className="h-4 w-4" />
+          Coach
         </Link>
         {entries.length > 0 && (
           dayFinalized ? (

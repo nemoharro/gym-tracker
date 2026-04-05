@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { Dumbbell, UtensilsCrossed, Flame, Loader2, Scale, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Dumbbell, UtensilsCrossed, Flame, Loader2, Scale, TrendingUp, TrendingDown, Minus, Sparkles } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 
 const QUOTES = [
@@ -266,14 +266,18 @@ export default function DashboardPage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link href="/workout" className="flex items-center justify-center gap-2.5 bg-primary text-primary-foreground rounded-xl p-5 text-base font-semibold active:opacity-80">
-          <Dumbbell className="h-5 w-5" />
-          Start Workout
+      <div className="grid grid-cols-3 gap-2">
+        <Link href="/workout" className="flex items-center justify-center gap-1.5 bg-primary text-primary-foreground rounded-xl p-3 text-sm font-semibold active:opacity-80">
+          <Dumbbell className="h-4 w-4" />
+          Workout
         </Link>
-        <Link href="/food" className="flex items-center justify-center gap-2.5 bg-card border border-border rounded-xl p-5 text-base font-semibold active:opacity-80">
-          <UtensilsCrossed className="h-5 w-5" />
-          Log Food
+        <Link href="/food" className="flex items-center justify-center gap-1.5 bg-card border border-border rounded-xl p-3 text-sm font-semibold active:opacity-80">
+          <UtensilsCrossed className="h-4 w-4" />
+          Food
+        </Link>
+        <Link href="/coach" className="flex items-center justify-center gap-1.5 bg-card border border-border rounded-xl p-3 text-sm font-semibold active:opacity-80">
+          <Sparkles className="h-4 w-4" />
+          Coach
         </Link>
       </div>
 
