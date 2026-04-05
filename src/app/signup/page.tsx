@@ -6,16 +6,23 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function SignUpPage() {
+  const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const router = useRouter();
 
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    if (!displayName.trim()) {
+      setError("Please enter your name.");
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
@@ -30,15 +37,31 @@ export default function SignUpPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
 
-    if (error) {
-      setError(error.message);
+    if (signUpError) {
+      setError(signUpError.message);
       setLoading(false);
-    } else {
-      router.push("/workout");
-      router.refresh();
+      return;
     }
+
+    // If email confirmation is required, Supabase returns a user but no session
+    if (data.user && !data.session) {
+      setSuccess(true);
+      setLoading(false);
+      return;
+    }
+
+    // Create profile row for the new user
+    if (data.user) {
+      await supabase.from("profiles").insert({
+        id: data.user.id,
+        display_name: displayName.trim(),
+      });
+    }
+
+    router.push("/dashboard");
+    router.refresh();
   }
 
   return (
@@ -49,7 +72,33 @@ export default function SignUpPage() {
           <p className="text-muted text-sm mt-1">Create your account</p>
         </div>
 
+        {success ? (
+          <div className="bg-card border border-border rounded-xl p-6 text-center space-y-3">
+            <p className="text-lg font-semibold">Check your email</p>
+            <p className="text-sm text-muted">
+              We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come back and sign in.
+            </p>
+            <Link href="/login" className="inline-block mt-2 text-primary font-medium text-sm hover:underline">
+              Go to Sign In
+            </Link>
+          </div>
+        ) : (
         <form onSubmit={handleSignUp} className="space-y-4">
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium mb-1">
+              Name
+            </label>
+            <input
+              id="name"
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="What should we call you?"
+              className="w-full px-3 py-2.5 bg-card border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+              required
+            />
+          </div>
+
           <div>
             <label htmlFor="email" className="block text-sm font-medium mb-1">
               Email
@@ -102,13 +151,16 @@ export default function SignUpPage() {
             {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
+        )}
 
-        <p className="text-center text-sm text-muted">
-          Already have an account?{" "}
-          <Link href="/login" className="text-primary hover:underline">
-            Sign in
-          </Link>
-        </p>
+        {!success && (
+          <p className="text-center text-sm text-muted">
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              Sign in
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );
