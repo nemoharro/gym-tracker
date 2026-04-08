@@ -356,13 +356,17 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-4">
+        <Link href="/weight" className="block bg-card border border-border rounded-xl p-4 active:bg-secondary transition-colors">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold flex items-center gap-1.5">
               <Scale className="h-4 w-4 text-muted" />
               Weight
             </span>
-            {todayWeight && <span className="text-sm font-bold">{todayWeight.toFixed(1)}kg</span>}
+            {todayWeight ? (
+              <span className="text-sm font-bold">{todayWeight.toFixed(1)}kg</span>
+            ) : (
+              <span className="text-xs text-primary font-medium">Log</span>
+            )}
           </div>
           {weightData.length > 1 ? (
             <div className="h-16">
@@ -374,7 +378,7 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <Link href="/weight" className="text-xs text-primary font-medium">Log weight</Link>
+            <p className="text-xs text-primary font-medium">Tap to log your weight</p>
           )}
           {weightChange !== null && (
             <div className="flex items-center gap-1 mt-2">
@@ -382,7 +386,7 @@ export default function DashboardPage() {
               <span className="text-xs text-muted">{weightChange > 0 ? "+" : ""}{weightChange}kg / 30d</span>
             </div>
           )}
-        </div>
+        </Link>
       </div>
 
       {/* All-time sessions */}

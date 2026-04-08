@@ -99,6 +99,7 @@ function ExerciseCard({
                   weightKg={set.weightKg}
                   reps={set.reps}
                   rpe={set.rpe}
+                  isPB={pb != null && set.weightKg >= pb.weight_kg}
                   onDelete={finalized ? undefined : () => onDeleteSet(exerciseId, i)}
                 />
               ))}
