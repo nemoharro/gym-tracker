@@ -72,12 +72,19 @@ function ExerciseCard({
             </span>
             {finalized && <Check className="h-4 w-4 text-primary" />}
           </div>
-          {pb && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <Trophy className="h-3 w-3 text-yellow-500" />
-              <span className="text-xs text-muted">{pb.weight_kg}kg × {pb.reps}</span>
-            </div>
-          )}
+          {sets.length > 0 && (() => {
+            const maxWeight = Math.max(...sets.map(s => s.weightKg));
+            const repsAtMax = sets.filter(s => s.weightKg === maxWeight).map(s => s.reps);
+            const isPB = pb != null && maxWeight >= pb.weight_kg;
+            return (
+              <div className="flex items-center gap-1 mt-0.5">
+                {isPB && <Trophy className="h-3 w-3 text-yellow-500" />}
+                <span className={`text-xs ${isPB ? "text-yellow-500 font-medium" : "text-muted"}`}>
+                  {maxWeight}kg × {repsAtMax.join("-")}
+                </span>
+              </div>
+            );
+          })()}
         </div>
         {expanded ? (
           <ChevronUp className="h-4 w-4 text-muted" />
